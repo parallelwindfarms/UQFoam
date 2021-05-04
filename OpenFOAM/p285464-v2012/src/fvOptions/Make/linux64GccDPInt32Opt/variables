@@ -1,0 +1,2 @@
+derivedSources=sources/derived
+LIB = $(FOAM_USER_LIBBIN)/libfvOptionsCustom
