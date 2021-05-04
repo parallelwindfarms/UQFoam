@@ -1,0 +1,43 @@
+#!/bin/bash
+
+(
+
+cd postProcessing/sample;
+rm -r latestTimeDir;
+
+ls | grep '[0-9]\+$' | sort -n | tail -n1 | while read n;do cp -r "$n" latestTimeDir;done
+
+cd latestTimeDir;
+
+# 0=det 1=uq
+caseType=1
+
+if [ $caseType -eq 1 ]; then
+echo "Hello Jigar!"
+paste X_by_*_nu*.xy | column -s $'\t' -t       > p_xByd;
+paste X_by_*_U*.xy | column -s $'\t' -t        > U_xByd;
+#paste X_by_*_R*.xy | column -s $'\t' -t        > R_xByd;
+cp centerline_nu*.xy pc
+cp centerline_U*.xy Uc
+#cp centerline_R*.xy Rc
+fi
+
+
+if [ $caseType -eq 0 ]; then
+paste X_by_*_p*.xy | column -s $'\t' -t        > p_xByd;
+paste X_by_*_UM*.xy | column -s $'\t' -t        > U_xByd;
+paste X_by_*_UP*.xy | column -s $'\t' -t 	> R_xByd;
+cp centerline_p*.xy pc
+cp centerline_UM*.xy Uc
+cp centerline_UP*.xy Rc
+fi
+
+#cp Y_by_*_nu*.xy px.xy
+#cp Y_by_*_U*.xy Ux.xy
+#cp Y_by_*_US*.xy Ux.xy
+#cp Y_by_*_R*.xy Rx.xy
+#cp Y_by_*_UP*.xy Rx.xy
+
+echo "Done."
+
+)

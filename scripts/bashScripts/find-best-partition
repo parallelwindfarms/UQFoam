@@ -1,0 +1,163 @@
+#!/bin/bash
+
+excludeGrp=rc_admin
+
+if hash sinfo 2>/dev/null; then
+  echo " "
+else
+  echo "   --- Error: Slurm is not available in this node."
+  exit 1
+fi
+
+while getopts o:f: option
+do
+case "${option}"
+in
+o) optU=${OPTARG};;
+f) optF=${OPTARG};;
+esac
+done
+
+if [[ $optU = help ]]; then
+  echo "   --- Find and print Slurm configuration: sh find-best-partition -f submit.sh -o set"
+  echo "   --- Check for the best Slurm partition: sh find-best-partition -f submit.sh -o check"
+fi
+
+submissionScript=$optF
+
+if [[ $optU = set ]]; then
+
+  if [[ ! $optF ]]; then
+    echo "   --- Specify Slurm submission script with the -f option."
+    exit 1
+  fi
+
+  rm -rf tmpwdir
+  mkdir -p tmpwdir
+
+  # Dump Slurm partitions and their allowed groups to a file
+  scontrol show partition | grep "PartitionName\|AllowGroups" > tmpwdir/slurmPartInfo.txt
+
+  # Get total number of Slurm patitions.
+  numPar=$(scontrol show partition | grep "PartitionName" | wc -l)
+
+  # Re-count number of Slurm partitions
+  nL=$(cat tmpwdir/slurmPartInfo.txt | wc -l)
+
+  # Throw an error if there is a mismatch in number of Slurm patitions
+  if [ $((nL/2)) -ne $numPar ]; then
+    echo "   --- There is error with number of SLURM partitions."
+    echo "   --- Number of actual partitions:  $numPar"
+    echo "   --- Number of partitions in the file:  $((nL/2))"
+  fi
+
+  # Number of groups associated with user
+  grps=$(groups)
+  nGrp=$(echo $grps | wc -w)
+  rm -f tmpwdir/allowedParts.txt
+
+  # Loop over SLURM partitions
+  for i in $(seq 2 2 $nL); do
+    sw=$(head -$i tmpwdir/slurmPartInfo.txt | tail -2)
+    parName=$(echo $sw | cut -d'=' -f2 | cut -d' ' -f1)
+
+    for j in $(seq 1 $nGrp); do
+      grpN=$(echo $grps | cut -d' ' -f$j)
+      if [ $grpN != $excludeGrp ]; then
+        if [[ $sw = *"$grpN"* ]] || [[ $sw = *"AllowGroups=ALL"* ]]; then
+          #echo "   --- Group: $grpN, Partition: $parName"
+          echo $parName >> tmpwdir/allowedParts.txt
+        fi
+      fi
+    done
+  done
+
+  rm -f tmpwdir/slurmPartInfo.txt
+
+fi
+
+
+if [[ $optU = check ]]; then
+
+  if [[ ! $optF ]]; then
+    echo "   --- Specify Slurm submission script with the -f option."
+    exit 1
+  fi
+
+  if [ ! -e tmpwdir/allowedParts.txt ]; then
+    echo "   --- First running: sh find-best-partition -f $submissionScript -o set"
+    sh find-best-partition -f $submissionScript -o set
+  fi
+
+  # Check specific Slurm submission line number for partition name
+  lineN=$(grep -n " -p "  $submissionScript | cut -d':' -f1)
+
+  if [ ! $lineN ]; then
+    lineN=$(grep -n " --partition "  $submissionScript | cut -d':' -f1)
+    if [ ! $lineN ]; then
+      echo "   --- Error: Specifiy a default partition in Slurm submission script."
+      exit 1
+    fi
+  fi
+
+  rm -f tmpwdir/result.txt
+  rm -f tmpwdir/error.log
+
+  echo " "
+
+  errorSt=0
+
+  # Loop over each allowed Slurm partition listed in allowedParts.txt file
+  for i in $(cat tmpwdir/allowedParts.txt); do
+    # Change the partition name
+    subSName=tmpwdir/slurm_$i.sh
+    sed "${lineN}s/.*/#SBATCH -p $i/" $submissionScript > $subSName
+
+    tmpF=${subSName/.sh}_tmp.txt
+
+    timCurrent=$(date +%s)
+
+    # run sbatch with --test-only to get time
+    sbatch --test-only $subSName > $tmpF 2>&1
+
+    if [[ $(cat $tmpF) = *"error"* ]] || [[ $(cat $tmpF) = *"failure"* ]]; then
+      echo "   --- Error using partition: $i"
+      echo "  " >> tmpwdir/error.log
+      echo "   --- Error using partition: $i" >> tmpwdir/error.log
+      cat $tmpF >> tmpwdir/error.log
+      errorSt=1
+      continue
+    fi
+
+    swT=$(cat $tmpF | cut -d' ' -f7)
+    swT=${swT/T/" "}
+    timEp=$(date -d "$swT" +%s 2>/dev/null)
+    timeDiff=$(($timEp-$timCurrent))
+
+    if [[ $timeDiff -lt 0 ]]; then
+      echo "   --- Error using partition: $i"
+      echo "  " >> tmpwdir/error.log
+      echo "   --- Error using partition: $i" >> tmpwdir/error.log
+      cat $tmpF >> tmpwdir/error.log
+      echo "Current Time: $timCurrent, Partition Run Time: $timEp, Diff: $timeDiff" >> tmpwdir/error.log
+      errorSt=1
+      continue
+    fi
+
+    echo "   --- $timeDiff: $i" >> tmpwdir/result.txt
+  done
+
+  if [ $errorSt = 1 ]; then
+    echo "   --- Check tmpwdir/error.log for error log"
+  fi
+
+  echo " "
+  echo "   --- Waiting time to run this job on SLURM partitions sorted by time (sec)"
+  sort -k2 -n tmpwdir/result.txt
+
+  # Remove temp files
+  rm -f tmpwdir/slurm_*.txt tmpwdir/result.txt
+
+  echo " "
+  echo "   --- Find SLURM submission scripts inside tmpwdir/ folder"
+fi
