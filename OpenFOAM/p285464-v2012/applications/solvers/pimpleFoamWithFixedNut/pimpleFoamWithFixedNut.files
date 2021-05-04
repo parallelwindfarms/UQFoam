@@ -1,7 +1,0 @@
-Make/files
-Make/options
-UEqn.H
-correctPhi.H
-createFields.H
-pEqn.H
-pimpleFoamWithFixedNut.C

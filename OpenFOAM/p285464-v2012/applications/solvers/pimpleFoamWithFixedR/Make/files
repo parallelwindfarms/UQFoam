@@ -1,3 +1,0 @@
-pimpleFoamWithFixedR.C
-
-EXE = $(FOAM_USER_APPBIN)/pimpleFoamWithFixedR

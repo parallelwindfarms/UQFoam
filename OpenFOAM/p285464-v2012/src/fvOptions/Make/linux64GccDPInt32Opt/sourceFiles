@@ -1,4 +1,0 @@
-SOURCE = \
-$(derivedSources)/actuationDiskSourceWithFieldNames/actuationDiskSourceWithFieldNames.C \
-
-# sources
