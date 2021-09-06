@@ -18,7 +18,7 @@ d     = 0
 
 
 # <codecell> Turbulent quantities
-I = 15/100
+I = 6.2/100
 
 num = kappa * (2/3)**0.5
 den = I* Cmu**0.25
