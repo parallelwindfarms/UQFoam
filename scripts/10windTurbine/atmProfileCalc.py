@@ -8,7 +8,6 @@ Created on Mon Feb  8 18:37:35 2021
 
 import numpy as np
 
-
 # <codecell> Constants
 kappa = 0.4
 Cmu   = 0.09
