@@ -6,11 +6,12 @@ import os, sys
 import numpy as np
 import pyvista as pv
 import pickle
-import tqdm
+from tqdm import tqdm
 
 from multiprocessing import Pool
 from functools import partial
 from timeit import default_timer as timer
+from ML_Utils import getMeshData, getCaseData
 
 SCRIPTS = os.environ['SCRIPTS']
 DATA    = os.environ['windTurbineData']
@@ -38,131 +39,104 @@ mlDataDir = mlDir+'data/'
 # Parametrs
 D, h, Uref = 80, 70, 8
 Wdx, d_D, nWT = D/60., 7, 1
+x_up_D_WT = 1.
 ADloc = (0,0,h)
 
 # # Original mesh params
 # nx, ny, nz = int(5*30), int(4*1.25*15), int(1.6*(1.25+7/8.)*15)
 
 # Projection mesh params
-# mlMeshName, nx, ny, nz = 'M128/', 549, 128, 128 # M128
+# mlMeshName, nx, ny, nz = 'M128/', 549, 128, 128
 mlMeshName, nx, ny, nz = 'M64/', 275, 64, 64
 
 # <codecell> Read OpenFOAM case mesh access to grid and cell values
-# vtkFile = samplesDir+'baseCase/project2MLMesh/VTK/project2MLMesh_0.vtk'
-vtkFile = samplesDir+'sample_57/project2MLMesh/VTK/project2MLMesh_0.vtk'
+# case = samplesDir+'baseCase/'
+case = samplesDir+'sample_0/'
 
-mesh    = pv.UnstructuredGrid(vtkFile)
-nCells  = mesh.n_cells
-cCenter = np.array(mesh.cell_centers().points)
-
-x_up_D_WT = 1
-xStart_WT, xEnd_WT = ADloc[0]-x_up_D_WT*D, ADloc[0]+(7.-x_up_D_WT)*D
-cCenterWT_idx = np.where(
-    (cCenter[:,0] >= xStart_WT) & (cCenter[:,0] <= xEnd_WT))[0]
-cCenter_WT = cCenter[cCenterWT_idx]
-nCells_WT = cCenter_WT.shape[0]
-nx_WT = int(nCells_WT/ny/nz)
-assert (nx_WT==nz==ny)
-ML_meshShape = tuple([nz, ny, nx_WT])
-
-startPlane_WT_idx = (cCenter_WT[:,0]==cCenter_WT[:,0].min())
-endPlane_WT_idx   = (cCenter_WT[:,0]==cCenter_WT[:,0].max())
-
-# <codecell> Read WT cell values for baseCase
-UMagDet = np.linalg.norm(mesh.cell_data['U'][cCenterWT_idx], axis=1)
-UHubDet = UMagDet[startPlane_WT_idx].mean()
-defUDet = (UHubDet-UMagDet)/UHubDet
-
-tkeDet   = np.array(mesh.cell_data['k'][cCenterWT_idx])
-TIAddDet = np.sqrt(tkeDet*2/3)/Uref *100
-TIHubDet = TIAddDet[startPlane_WT_idx].mean()
-TIAddDet = TIAddDet - TIHubDet
-
-RDet = myUQlib.symmTensorToTensorv2021(
-    mesh.cell_data['turbulenceProperties:R'][cCenterWT_idx], nCells_WT)
-ADet = myUQlib.anisotropyTensor(RDet, tkeDet, nCells_WT)
-ADet = myUQlib.getSymmTensorValues(ADet, nCells_WT)
-
-del UMagDet, tkeDet, RDet
-del mesh, cCenter
+vtkFile = case+'project2MLMesh_'+mlMeshName+\
+    'VTK/project2MLMesh_'+mlMeshName[:-1]+'_0.vtk'
+mesh, nCells, mlMeshShape, nCells_WT, cCenter_WT, \
+    cCenterWT_idx, startPlane_WT_idx, endPlane_WT_idx, \
+    y0Plane_WT_idx, zhPlane_WT_idx, cellsInDiskAtHubHeight = \
+    getMeshData(vtkFile, D, h, ADloc, ny, nz, d_D, x_up_D_WT)
+    
+UMagDet, UHubDet, defUDet, tkeDet, TIDet, TIHubDet, RDet, ADet, nutDet = \
+    getCaseData(myUQlib, mesh, nCells_WT, cCenterWT_idx, 
+                    cellsInDiskAtHubHeight, Uref)
 
 # <codecell> Preprocess and dump samples
 def getDataInWT(cCenterWT_idx, s):
     extn = '.pkl'
 
     vtkFile = samplesDir+\
-        'sample_'+str(s)+'/project2MLMesh/VTK/project2MLMesh_0.vtk'
+        'sample_'+str(s)+'/project2MLMesh_'+mlMeshName+\
+            'VTK/project2MLMesh_'+mlMeshName[:-1]+'_0.vtk'
     mesh = pv.UnstructuredGrid(vtkFile)
+    
+    UMag, UHub, defU, tke, TI, TIHub, R, A, nut = \
+        getCaseData(myUQlib, mesh, nCells_WT, cCenterWT_idx, 
+                        cellsInDiskAtHubHeight, Uref)
 
-    UMag = np.linalg.norm(mesh.cell_data['U'][cCenterWT_idx], axis=1)
-    UHub = UMag[startPlane_WT_idx].mean()
-    defU = (UHub-UMag)/UHub
     pickle.dump(UHub,
                 open(mlDataDir+mlMeshName+'sample_'+str(s)+'/UHub'+extn,'wb'))
-    pickle.dump(defU.reshape(*ML_meshShape, 1),
+    pickle.dump(UMag.reshape(*mlMeshShape, 1),
+                open(mlDataDir+mlMeshName+'sample_'+str(s)+'/UMag'+extn,'wb'))    
+    pickle.dump(defU.reshape(*mlMeshShape, 1),
                 open(mlDataDir+mlMeshName+'sample_'+str(s)+'/defU'+extn,'wb'))
 
-    tke   = np.array(mesh.cell_data['k'][cCenterWT_idx])
-    TIAdd = np.sqrt(tke*2/3)/Uref *100
-    TIHub = TIAdd[startPlane_WT_idx].mean()
-    TIAdd = TIAdd - TIHub
     pickle.dump(TIHub,
                 open(mlDataDir+mlMeshName+'sample_'+str(s)+'/TIHub'+extn,'wb'))
-    pickle.dump(TIAdd.reshape(*ML_meshShape, 1),
-                open(mlDataDir+mlMeshName+'sample_'+str(s)+'/TIAdd'+extn,'wb'))
+    pickle.dump(tke.reshape(*mlMeshShape, 1),
+                open(mlDataDir+mlMeshName+'sample_'+str(s)+'/k'+extn,'wb'))
+    pickle.dump(TI.reshape(*mlMeshShape, 1),
+                open(mlDataDir+mlMeshName+'sample_'+str(s)+'/TI'+extn,'wb'))
 
-    R = myUQlib.symmTensorToTensorv2021(
-        mesh.cell_data['turbulenceProperties:R'][cCenterWT_idx], nCells_WT)
-    A = myUQlib.anisotropyTensor(R, tke, nCells_WT)
-    A = myUQlib.getSymmTensorValues(A, nCells_WT)
-    pickle.dump(A.reshape(*ML_meshShape, 6),
-                open(mlDataDir+mlMeshName+'sample_'+str(s)+'/A'+extn,'wb'))
+    pickle.dump(nut.reshape(*mlMeshShape, 1),
+                open(mlDataDir+mlMeshName+'sample_'+str(s)+'/nut'+extn,'wb'))
+    pickle.dump(R.reshape(*mlMeshShape, 6),
+                open(mlDataDir+mlMeshName+'sample_'+str(s)+'/R'+extn,'wb'))
+    pickle.dump(A.reshape(*mlMeshShape, 6),
+                open(mlDataDir+mlMeshName+'sample_'+str(s)+'/A'+extn,'wb'))      
 
 samplesRange = range(0, 1000)
 
-pool = Pool(processes=10)
+pool = Pool(processes=32)
 start = timer()
-list(tqdm.tqdm(
+list(tqdm(
         pool.imap(partial(getDataInWT, cCenterWT_idx), samplesRange),
-        total=len(samplesRange)))
+        total=len(samplesRange))
+)
 pool.close()
 pool.join()
 print(timer()-start, 's')
 
 # <codecell> Load a batch [Testing]
-batchSize = 100
-loadSampleRange = range(0,100)#np.random.randint(50, 60, batchSize)
+batchSize = 1000
+loadSampleRange = range(0,1000)#np.random.randint(50, 60, batchSize)
 
-UHub = np.zeros((batchSize))
-defU = np.zeros((batchSize, *ML_meshShape, 1))
+UHub  = np.zeros((batchSize))
 TIHub = np.zeros((batchSize))
-TIAdd = np.zeros((batchSize, *ML_meshShape, 1))
-A = np.zeros((batchSize, *ML_meshShape, 6))
+defU = np.zeros((batchSize, *mlMeshShape, 1))
+UMag = np.zeros((batchSize, *mlMeshShape, 1))
+TI  = np.zeros((batchSize, *mlMeshShape, 1))
+tke = np.zeros((batchSize, *mlMeshShape, 1))
+nut = np.zeros((batchSize, *mlMeshShape, 1))
+R = np.zeros((batchSize, *mlMeshShape, 6))
+A = np.zeros((batchSize, *mlMeshShape, 6))
 
 start = timer()
 extn = '.pkl'
-for i in tqdm.tqdm(range(batchSize)):
+for i in tqdm(range(batchSize)):
     s = loadSampleRange[i]
-    print(s)
     UHub[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/UHub'+extn,'rb'))
-    defU[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/defU'+extn,'rb'))
+    # UMag[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/UMag'+extn,'rb'))
+    # defU[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/defU'+extn,'rb'))
     TIHub[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/TIHub'+extn,'rb'))
-    TIAdd[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/TIAdd'+extn,'rb'))
-    A[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/A'+extn,'rb'))
+    # tke[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/k'+extn,'rb'))
+    # TI[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/TI'+extn,'rb'))
+    # nut[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/nut'+extn,'rb'))
+    # R[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/R'+extn,'rb'))
+    # A[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/A'+extn,'rb'))
 
 print(timer()-start, 's')
 
-
-# <codecell>
-
-
-# <codecell>
-
-
-# <codecell>
-
-
-# <codecell>
-
-
-# <codecell>
