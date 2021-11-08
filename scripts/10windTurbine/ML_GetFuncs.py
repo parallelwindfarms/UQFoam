@@ -20,9 +20,10 @@ def getMeshData(vtkFile, D, h, ADloc, ny, nz, d_D, x_up_D_WT):
     startPlane_WT_idx = (cCenter_WT[:,0] == cCenter_WT[:,0].min())
     endPlane_WT_idx   = (cCenter_WT[:,0] == cCenter_WT[:,0].max())
     y0Plane_WT_idx = (cCenter_WT[:,1] > np.abs(cCenter_WT[:,1]).min()-1) * \
-                     (cCenter_WT[:,1] < np.abs(cCenter_WT[:,1]).min()+1)
-    zhPlane_WT_idx = ((cCenter_WT[:,2] > (h)) * (cCenter_WT[:,2] < (h+3)))
-    
+                     (cCenter_WT[:,1] < np.abs(cCenter_WT[:,1]).min()+1) * \
+                     (cCenter_WT[:,2] < (h+2.*D))   
+    zhPlane_WT_idx = (cCenter_WT[:,2] > h) * (cCenter_WT[:,2] < (h+3)) * \
+                     (cCenter_WT[:,1] > -2.*D) * (cCenter_WT[:,1] < 2.*D)
     
     cellsInDiskAtHubHeight = np.array(np.where(
         (cCenter_WT[:,0]>=xStart_WT) & (cCenter_WT[:,0]<=(xStart_WT+10))  &

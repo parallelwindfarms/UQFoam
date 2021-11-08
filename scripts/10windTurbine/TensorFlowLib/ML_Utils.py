@@ -26,14 +26,14 @@ concatenator = lambda a,b: np.concatenate((a.numpy(),b.numpy()), axis=-1)
 standardizer = lambda x, mean, std: (x.numpy() - mean) / (std + 1e-16)
 
 # Relative Error in L1 norm
-def relErrL1(y_true , y_pred):
+def L1(y_true , y_pred):
     SMALL = 1e-16
     y_true, y_pred = tf.cast(y_true, fdtype), tf.cast(y_pred, fdtype)
     relErr = tf.divide(tf.abs(y_true-y_pred), tf.abs(y_true) + SMALL)
     return tf.reduce_mean(relErr)
 
 # Relative Error in L2 norm
-def relErrL2(y_true , y_pred):
+def L2(y_true , y_pred):
     SMALL = 1e-16
     y_true, y_pred = tf.cast(y_true, fdtype), tf.cast(y_pred, fdtype)
     relErr = tf.divide(tf.norm(y_true-y_pred), tf.norm(y_true) + SMALL)
