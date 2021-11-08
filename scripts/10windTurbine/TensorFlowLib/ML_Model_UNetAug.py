@@ -5,11 +5,12 @@ from tensorflow.keras.layers import Input, Conv3D, Conv3DTranspose, Reshape
 from tensorflow.keras.layers import concatenate, UpSampling3D
 from tensorflow.keras.layers import Dropout, BatchNormalization
 from tensorflow.keras.layers import ReLU, LeakyReLU, ELU
+from tensorflow.keras.regularizers import l1
 
 # %% UNetBlock
 def convBlock(name='NO_NAME', nOutChannels=None, convType=None, kernelSize=4,
               stride=2, activation='relu', kernelInitializer='he_normal',
-              padding='same', batchNorm=True, dropFrac=0.):
+              padding='same', batchNorm=True, dropFrac=0., l1_lambda=0.):
 
     if activation=='relu':
         activation = ReLU()
@@ -26,15 +27,18 @@ def convBlock(name='NO_NAME', nOutChannels=None, convType=None, kernelSize=4,
         block.add(UpSampling3D(size=2))
         block.add(Conv3D(nOutChannels, kernelSize-1, strides=1,
                          activation=activation, padding=padding,
-                         kernel_initializer=kernelInitializer))
+                         kernel_initializer=kernelInitializer,
+                         kernel_regularizer=l1(l1_lambda)))
     elif convType=='transposed':
         block.add(Conv3DTranspose(nOutChannels, kernelSize, strides=stride,
                                   activation=activation, padding=padding,
-                                  kernel_initializer=kernelInitializer))
+                                  kernel_initializer=kernelInitializer,
+                                  kernel_regularizer=l1(l1_lambda)))
     else:
         block.add(Conv3D(nOutChannels, kernelSize, strides=stride,
                          activation=activation, padding=padding,
-                         kernel_initializer=kernelInitializer))
+                         kernel_initializer=kernelInitializer,
+                         kernel_regularizer=l1(l1_lambda)))
 
     if batchNorm:
         block.add(BatchNormalization())
@@ -45,7 +49,7 @@ def convBlock(name='NO_NAME', nOutChannels=None, convType=None, kernelSize=4,
 
 # %% UNetAug Model
 def UNetAug(meshShape, nRandFieldsChannels=6, nRandVars=2, nOutChannels=2,
-            dropFrac=0., channels=64):
+            dropFrac=0., channels=64, l1_lambda=0., convType='upsampled'):
 
     # Clear Session
     tf.keras.backend.clear_session()
@@ -55,7 +59,6 @@ def UNetAug(meshShape, nRandFieldsChannels=6, nRandVars=2, nOutChannels=2,
 
     # Params
     act = 'leaky_relu'
-    convType='upsampled'
 
     # Inputs Layers
     randFields = Input(shape=(*meshShape, nRandFieldsChannels), name='input_A')

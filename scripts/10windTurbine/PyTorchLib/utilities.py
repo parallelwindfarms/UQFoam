@@ -145,17 +145,17 @@ def Net(net, X, nOutCells):
 def L1Err(y_true, y_pred):
     SMALL = 1e-16    
     err = torch.abs(y_true-y_pred)/(torch.abs(y_true)+SMALL)
-    return round(err.mean().item(), 2)
-    # return round(err.max().item(), 2)
+    return round(err.mean().item(), 3)
+    # return round(err.max().item(), 3)
 
 #%% Torch L2 Error
 def L2Err(y_true, y_pred):
     SMALL = 1e-16    
     err = torch.norm(y_true-y_pred)/(torch.norm(y_true)+SMALL)
-    return round(err.item(), 2)
+    return round(err.item(), 3)
 
 #%% To numpy
-torchToNumpy = lambda x: x.detach().cpu().numpy()
+torchToNumpy = lambda x: x.detach().cpu()#.numpy()
     
 
 

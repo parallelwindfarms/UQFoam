@@ -41,19 +41,20 @@ def relErrL2(y_true , y_pred):
 
 # %% Data Loader
 
-# From the Data Processing Step
-UHub_mean, UHub_std = (6.279, 1.967)
-TIHub_mean, TIHub_std = (12.969, 4.438)
-UMagMax, TIMax, tkeMax = (14.616, 21.795, 8.815)
+# From the data processing
+U_mean, U_std = (6.2793484956026075, 1.9678320667602778) # 7.3, 2.3
+TI_mean, TI_std = (12.969248275756836, 4.438964138701352) # 10.3, 4.8
+UMagMax, TIMax, tkeMax = (14.61684799194336, 21.795602798461914, 8.81576156616211)
+UMagMax, TIMax, tkeMax = (14.61684799194336, 21.795602798461914, 8.81576156616211)
 
 # Hub Data (Field)
 def loadPickledSamplesAtInputFields(s, meshShape):
     UHub = tf.py_function(pklLoader, [s+'/UHub.pkl'], [fdtype])
-    UHub = tf.py_function(standardizer, [UHub, UHub_mean, UHub_std], [fdtype])
+    UHub = tf.py_function(standardizer, [UHub, U_mean, U_std], [fdtype])
     UHub_field = tf.py_function(point_to_field, [UHub, meshShape], [fdtype])  
     
     TIHub = tf.py_function(pklLoader, [s+'/TIHub.pkl'], [fdtype])
-    TIHub = tf.py_function(standardizer, [TIHub, TIHub_mean, TIHub_std], [fdtype])
+    TIHub = tf.py_function(standardizer, [TIHub, TI_mean, TI_std], [fdtype])
     TIHub_field = tf.py_function(point_to_field, [TIHub, meshShape], [fdtype])
     
     data = tf.py_function(concatenator, [UHub_field, TIHub_field], [fdtype])
@@ -72,9 +73,9 @@ def loadPickledSamplesAtInputFields(s, meshShape):
 # Hub Data (Point)
 def loadPickledSamplesAtHub(s):
     UHub = tf.py_function(pklLoader, [s+'/UHub.pkl'], [fdtype])
-    UHub = tf.py_function(standardizer, [UHub, UHub_mean, UHub_std], [fdtype])    
+    UHub = tf.py_function(standardizer, [UHub, U_mean, U_std], [fdtype])    
     TIHub = tf.py_function(pklLoader, [s+'/TIHub.pkl'], [fdtype])
-    TIHub = tf.py_function(standardizer, [TIHub, TIHub_mean, TIHub_std], [fdtype])
+    TIHub = tf.py_function(standardizer, [TIHub, TI_mean, TI_std], [fdtype])
     data = tf.py_function(concatenator, [UHub, TIHub], [fdtype])
     data = tf.reshape(data, [2])
     return data
@@ -126,7 +127,7 @@ def batchSplitData(data, trainFrac, batchSize):
 
 # Data Generator Class
 class dataGenerator():
-    def __init__(self, fileNames, meshShape, trainFrac=0.8, batchSize=2):
+    def __init__(self, fileNames, meshShape, trainFrac=0.8, batchSize=1):
         
         # Attributes
         self.batchSize = batchSize
@@ -154,3 +155,5 @@ class dataGenerator():
         self.UNetAugIOBatchedSplitData = batchSplitData(
             self.UNetAugIOData, self.trainFrac, self.batchSize
         )
+
+# %%

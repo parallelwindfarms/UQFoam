@@ -35,6 +35,15 @@ print(f'Using device: {device}')
 randomSeed = 42
 np.random.seed = 42
 
+# %% Hyper-parameters
+tdtype=torch.float64
+# mlMeshName = 'M128/'
+mlMeshName = 'M64/'
+N_IN_CELLS = 1000
+N_LAYERS, N_NEURONS = 5, 256
+HIDDEN_LAYERS = N_LAYERS*[N_NEURONS]
+REVF = 0
+
 # %% Case details
 caseName   = cwd.split('/')[-2]
 casePngDir = '/2RRSTF/ML/' + caseName+'/png'
@@ -54,8 +63,8 @@ x_up_D_WT = 1.
 ADloc = lambda WT_num: (0 + (WT_num-1) *d_D*D, 0, h)
 
 # Projection mesh params
-# mlMeshName, nx, ny, nz = 'M128/', 549, 128, 128 # M128
-mlMeshName, nx, ny, nz = 'M64/', 275, 64, 64
+if mlMeshName == 'M128/': nx, ny, nz = 549, 128, 128
+elif mlMeshName == 'M64/': nx, ny, nz = 275, 64, 64
 
 # %% Read OpenFOAM baseCase mesh access to grid and cell values
 case = samplesDir+'baseCase/'
@@ -81,150 +90,166 @@ for WT_num in range(1,2):
         
     print('UHubDet TIHubDet:', UHubDet, TIHubDet)
 
-# %% Load a batch
-batchSize = 1000
-testSize = batchSize // 10
-loadSampleRange = range(0,1000)
-
-UHub  = np.zeros((batchSize))
-TIHub = np.zeros((batchSize))
-defU = np.zeros((batchSize, mlMeshShape[0]**3))
-UMag = np.zeros((batchSize, mlMeshShape[0]**3))
-TI  = np.zeros((batchSize, mlMeshShape[0]**3))
-tke = np.zeros((batchSize, mlMeshShape[0]**3))
-nut = np.zeros((batchSize, mlMeshShape[0]**3))
-R = np.zeros((batchSize, mlMeshShape[0]**3, 6))
-A = np.zeros((batchSize, mlMeshShape[0]**3, 6))
+# %% Load Data and Data Statistics
+shape = (-1,mlMeshShape[0]**3)
+extn = '.pkl'
 
 start = timer()
-extn = '.pkl'
-for i in tqdm(range(batchSize)):
-    s = loadSampleRange[i]
-    UHub[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/UHub'+extn,'rb'))
-    UMag[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/UMag'+extn,'rb')).reshape(-1)
-    defU[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/defU'+extn,'rb')).reshape(-1)
-    TIHub[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/TIHub'+extn,'rb'))
-    tke[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/k'+extn,'rb')).reshape(-1)
-    TI[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/TI'+extn,'rb')).reshape(-1)
-    nut[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/nut'+extn,'rb')).reshape(-1)
-    R[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/R'+extn,'rb')).reshape(-1,6)
-    A[i] = pickle.load(open(mlDataDir+mlMeshName+'sample_'+str(s)+'/A'+extn,'rb')).reshape(-1,6)
+
+UHub  = pickle.load(open(mlDataDir+mlMeshName+'UHub'+extn,'rb'))
+TIHub = pickle.load(open(mlDataDir+mlMeshName+'TIHub'+extn,'rb'))
+defU = pickle.load(open(mlDataDir+mlMeshName+'defU'+extn,'rb')).reshape(shape)
+UMag = pickle.load(open(mlDataDir+mlMeshName+'UMag'+extn,'rb')).reshape(shape)
+TI  = pickle.load(open(mlDataDir+mlMeshName+'TI'+extn,'rb')).reshape(shape)
+tke = pickle.load(open(mlDataDir+mlMeshName+'k'+extn,'rb')).reshape(shape)
+nut = pickle.load(open(mlDataDir+mlMeshName+'nut'+extn,'rb')).reshape(shape)
+R = pickle.load(open(mlDataDir+mlMeshName+'R'+extn,'rb')).reshape(*shape,6)
+A = pickle.load(open(mlDataDir+mlMeshName+'A'+extn,'rb')).reshape(*shape,6)
 
 print(timer()-start, 's')
 
 # %% Train-Test Split
-UMagTrain, tkeTrain, nutTrain, RTrain, ATrain, UHubTrain, TIHubTrain = \
-    UMag[testSize:], tke[testSize:], nut[testSize:], \
-    R[testSize:], A[testSize:], UHub[testSize:], TIHub[testSize:]
-UMagTest, tkeTest, nutTest, RTest, ATest, UHubTest, TIHubTest = \
-    UMag[:testSize], tke[:testSize], nut[:testSize], \
-    R[:testSize], A[:testSize], UHub[:testSize], TIHub[:testSize]  
+dataSize = len(UHub)
+trainSize = int(dataSize * 0.8)
+valSize = trainSize + (dataSize-trainSize) // 2
+
+UMagTrain, tkeTrain, TITrain, nutTrain, RTrain, ATrain, UHubTrain, TIHubTrain = \
+    UMag[:trainSize], tke[:trainSize], TI[:trainSize], nut[:trainSize], \
+    R[:trainSize], A[:trainSize], UHub[:trainSize], TIHub[:trainSize]
     
-# %% Normalize
+UMagVal, tkeVal, TIVal, nutVal, RVal, AVal, UHubVal, TIHubVal = \
+    UMag[trainSize:valSize], tke[trainSize:valSize], TI[trainSize:valSize], nut[trainSize:valSize], \
+    R[trainSize:valSize], A[trainSize:valSize], UHub[trainSize:valSize], TIHub[trainSize:valSize]     
+    
+UMagTest, tkeTest, TITest, nutTest, RTest, ATest, UHubTest, TIHubTest = \
+    UMag[valSize:], tke[valSize:], TI[valSize:], nut[valSize:], \
+    R[valSize:], A[valSize:], UHub[valSize:], TIHub[valSize:]  
+    
+print(UMagTrain.shape, UMagVal.shape, UMagTest.shape)
+
+# del UMag, tke, nut, R, A, UHub, TIHub, 
+
+# %% Scale Data
 normalize = lambda x, m, s: (x-m)/s
 
 UMagMax, tkeMax = UMagTrain.max(), tkeTrain.max()
-UHubMean, UHubStd = UHubTrain.mean(), UHubTrain.std()
-TIHubMean, TIHubStd = TIHubTrain.mean(), TIHubTrain.std()
-nutMean, nutStd = nutTrain.mean(), nutTrain.std()
-RMean, RStd = RTrain.mean(axis=0), RTrain.std(axis=0)
-AMean, AStd = ATrain.mean(axis=0), ATrain.std(axis=0)
-
 UMagTrain, tkeTrain = UMagTrain/UMagMax, tkeTrain/tkeMax
-nutTrain = normalize(nutTrain, nutMean, nutStd)
-RTrain = normalize(RTrain, RMean, RStd)
-ATrain = normalize(ATrain, AMean, AStd)
-UHubTrain = normalize(UHubTrain, UHubMean, UHubStd)
-TIHubTrain = normalize(TIHubTrain, TIHubMean, TIHubStd)
-
+UMagVal, tkeVal = UMagVal/UMagMax, tkeVal/tkeMax
 UMagTest, tkeTest = UMagTest/UMagMax, tkeTest/tkeMax
-nutTest = normalize(nutTest, nutMean, nutStd)
-RTest = normalize(RTest, RMean, RStd)
+
+# nutMean, nutStd = nutTrain.mean(axis=0), nutTrain.std(axis=0)
+# nutTrain = normalize(nutTrain, nutMean, nutStd)
+# nutVal = normalize(nutVal, nutMean, nutStd)
+# nutTest = normalize(nutTest, nutMean, nutStd)
+
+# RMean, RStd = RTrain.mean(axis=0), RTrain.std(axis=0)
+# RTrain = normalize(RTrain, RMean, RStd)
+# RVal = normalize(RVal, RMean, RStd)
+# RTest = normalize(RTest, RMean, RStd)
+
+AMean, AStd = ATrain.mean(axis=0), ATrain.std(axis=0)
+ATrain = normalize(ATrain, AMean, AStd)
+AVal = normalize(AVal, AMean, AStd)
 ATest = normalize(ATest, AMean, AStd)
+
+UHubMean, UHubStd = UHubTrain.mean(), UHubTrain.std()
+UHubTrain = normalize(UHubTrain, UHubMean, UHubStd)
+UHubVal = normalize(UHubVal, UHubMean, UHubStd)
 UHubTest = normalize(UHubTest, UHubMean, UHubStd)
+
+TIHubMean, TIHubStd = TIHubTrain.mean(), TIHubTrain.std()
+TIHubTrain = normalize(TIHubTrain, TIHubMean, TIHubStd)
+TIHubVal = normalize(TIHubVal, TIHubMean, TIHubStd)
 TIHubTest = normalize(TIHubTest, TIHubMean, TIHubStd)
 
 # %% Convert to torch tensors
-UMagTrain= torch.tensor(UMagTrain, dtype=torch.float64).to(device)
-tkeTrain= torch.tensor(tkeTrain, dtype=torch.float64).to(device)
+UHubTrain = torch.tensor(UHubTrain, requires_grad=True)
+TIHubTrain = torch.tensor(TIHubTrain, requires_grad=True)
+UMagTrain = torch.tensor(UMagTrain, dtype=tdtype)
+tkeTrain = torch.tensor(tkeTrain, dtype=tdtype)
+outputTrain = torch.concat((UMagTrain, tkeTrain), dim=-1).to(device)
 
-UMagTest= torch.tensor(UMagTest, dtype=torch.float64).to(device)
-tkeTest= torch.tensor(tkeTest, dtype=torch.float64).to(device)
-outputTest = torch.concat((UMagTest, tkeTest), dim=-1)
+UHubVal = torch.tensor(UHubVal, requires_grad=True)
+TIHubVal = torch.tensor(TIHubVal, requires_grad=True)
+UMagVal = torch.tensor(UMagVal, dtype=tdtype)
+tkeVal = torch.tensor(tkeVal, dtype=tdtype)
+outputVal = torch.concat((UMagVal, tkeVal), dim=-1).to(device)
 
-# %% Data collection in a single batch(s)
-nInCells, nOutCells = 10000, nCells_WT
+UHubTest = torch.tensor(UHubTest, requires_grad=True)
+TIHubTest = torch.tensor(TIHubTest, requires_grad=True)
+UMagTest = torch.tensor(UMagTest, dtype=tdtype)
+tkeTest = torch.tensor(tkeTest, dtype=tdtype)
+outputTest = torch.concat((UMagTest, tkeTest), dim=-1).to(device)
+                          
+# %% Data collection in batches
+nInCells, nOutCells = N_IN_CELLS, nCells_WT
 inCells = np.random.choice(np.arange(nOutCells),size=nInCells,replace=False)
 
-REVF = 0
-if REVF: nRFieldElems, nOutFieldsElems = 1+1+1 , 2 # UHub, TIHub nut # UMag, tke
-else: nRFieldElems, nOutFieldsElems = 6+1+1, 2 # UHub, TIHub, A # UMag, tke
+nutTrain = torch.tensor(nutTrain[:,inCells], requires_grad=True)
+nutVal = torch.tensor(nutVal[:,inCells], requires_grad=True)
+nutTest = torch.tensor(nutTest[:,inCells], requires_grad=True)
 
-Nf = len(UHubTrain) //10 * 9
-
-UinTrainBatch = torch.tensor(UHubTrain[:Nf], requires_grad=True).to(device)
-UinValBatch = torch.tensor(UHubTrain[Nf:], requires_grad=True).to(device)
-UinTestBatch = torch.tensor(UHubTest, requires_grad=True).to(device)
+# RTrain= torch.tensor(RTrain[:,inCells], requires_grad=True)
+# RVal= torch.tensor(RVal[:,inCells], requires_grad=True)
+# RTest = torch.tensor(RTest[:,inCells], requires_grad=True)
+ATrain = torch.tensor(ATrain[:,inCells], requires_grad=True)
+AVal = torch.tensor(AVal[:,inCells], requires_grad=True)    
+ATest = torch.tensor(ATest[:,inCells], requires_grad=True) 
     
-TIinTrainBatch = torch.tensor(TIHubTrain[:Nf], requires_grad=True).to(device)
-TIinValBatch = torch.tensor(TIHubTrain[Nf:], requires_grad=True).to(device)
-TIinTestBatch = torch.tensor(TIHubTest, requires_grad=True).to(device)
-
-outputTrain = torch.concat((UMagTrain[:Nf], tkeTrain[:Nf]), dim=-1)
-outputVal = torch.concat((UMagTrain[Nf:], tkeTrain[Nf:]), dim=-1)
+# UHub, TIHub, nut # UMag, tke
+if REVF: nRFieldElems, nOutFieldsElems = 1+1+1 , 2 
+# UHub, TIHub, A # UMag, tke
+else: nRFieldElems, nOutFieldsElems = 6+1+1, 2 
+# else: nRFieldElems, nOutFieldsElems = 1+1, 2 
 
 if REVF:
-    nutTrainBatch = torch.tensor(nutTrain[:Nf][:,inCells], requires_grad=True).to(device)
-    nutValBatch = torch.tensor(nutTrain[Nf:][:,inCells], requires_grad=True).to(device)
-    nutTestBatch = torch.tensor(nutTest[:,inCells], requires_grad=True).to(device)
     trainBatch = torch.concat(
-        ((torch.zeros_like(nutTrainBatch)+UinTrainBatch.reshape(-1,1)),
-         (torch.zeros_like(nutTrainBatch)+TIinTrainBatch.reshape(-1,1)), 
-         nutTrainBatch
+        ((torch.zeros_like(nutTrain)+UHubTrain.reshape(-1,1)),
+         (torch.zeros_like(nutTrain)+TIHubTrain.reshape(-1,1)), 
+         nutTrain
          ), axis=1
     )
     valBatch = torch.concat(
-        ((torch.zeros_like(nutValBatch)+UinValBatch.reshape(-1,1)),
-         (torch.zeros_like(nutValBatch)+TIinValBatch.reshape(-1,1)),
-         nutValBatch
+        ((torch.zeros_like(nutVal)+UHubVal.reshape(-1,1)),
+         (torch.zeros_like(nutVal)+TIHubVal.reshape(-1,1)),
+         nutVal
          ), axis=1
     )  
     testBatch = torch.concat(
-        ((torch.zeros_like(nutTestBatch)+UinTestBatch.reshape(-1,1)),
-         (torch.zeros_like(nutTestBatch)+TIinTestBatch.reshape(-1,1)),
-         nutTestBatch
+        ((torch.zeros_like(nutTest)+UHubTest.reshape(-1,1)),
+         (torch.zeros_like(nutTest)+TIHubTest.reshape(-1,1)),
+         nutTest
          ), axis=1
     )       
 else:
-    # RTrainBatch = torch.tensor(RTrain[:Nf][:,inCells], requires_grad=True).to(device)
-    # RValBatch = torch.tensor(RTrain[Nf:][:,inCells], requires_grad=True).to(device)
-    ATrainBatch = torch.tensor(ATrain[:Nf][:,inCells], requires_grad=True).to(device)
-    AValBatch = torch.tensor(ATrain[Nf:][:,inCells], requires_grad=True).to(device)    
-    ATestBatch = torch.tensor(ATest[:,inCells], requires_grad=True).to(device)    
     trainBatch = torch.concat(
-        ((torch.zeros_like(ATrainBatch[:,:,0]).unsqueeze(-1)+UinTrainBatch.reshape(-1,1,1)),
-         (torch.zeros_like(ATrainBatch[:,:,0]).unsqueeze(-1)+TIinTrainBatch.reshape(-1,1,1)),
-         # RTrainBatch
-         ATrainBatch
+        ((torch.zeros_like(ATrain[:,:,:1])+UHubTrain.reshape(-1,1,1)),
+         (torch.zeros_like(ATrain[:,:,:1])+TIHubTrain.reshape(-1,1,1)),
+         # RTrain
+          ATrain
          ), axis=-1
     )
     valBatch = torch.concat(
-        ((torch.zeros_like(AValBatch[:,:,0]).unsqueeze(-1)+UinValBatch.reshape(-1,1,1)),
-         (torch.zeros_like(AValBatch[:,:,0]).unsqueeze(-1)+TIinValBatch.reshape(-1,1,1)),
-         # RValBatch
-         AValBatch
+        ((torch.zeros_like(AVal[:,:,:1])+UHubVal.reshape(-1,1,1)),
+         (torch.zeros_like(AVal[:,:,:1])+TIHubVal.reshape(-1,1,1)),
+         # RVal
+          AVal
          ), axis=-1
     )
     testBatch = torch.concat(
-        ((torch.zeros_like(ATestBatch[:,:,0]).unsqueeze(-1)+UinTestBatch.reshape(-1,1,1)),
-         (torch.zeros_like(ATestBatch[:,:,0]).unsqueeze(-1)+TIinTestBatch.reshape(-1,1,1)),
-         # RValBatch
-         ATestBatch
+        ((torch.zeros_like(ATest[:,:,:1])+UHubTest.reshape(-1,1,1)),
+         (torch.zeros_like(ATest[:,:,:1])+TIHubTest.reshape(-1,1,1)),
+         # RTest
+          ATest
          ), axis=-1
     )    
 
-# %% NN parameters
-layersizes = [nInCells*nRFieldElems] + [64]*2 + [nOutCells*nOutFieldsElems]
+# trainBatch = torch.concat((UHubTrain.reshape(-1,1), TIHubTrain.reshape(-1,1)), dim=-1)
+# valBatch = torch.concat((UHubVal.reshape(-1,1), TIHubVal.reshape(-1,1)), dim=-1)
+# testBatch = torch.concat((UHubTest.reshape(-1,1), TIHubTest.reshape(-1,1)), dim=-1)
+
+# %% NN Model
+layersizes = [nInCells*nRFieldElems] + HIDDEN_LAYERS + [nOutCells*nOutFieldsElems]
 
 model = nets.NeuralNetwork(layersizes=layersizes, activation=torch.relu)
 model.to(device)
@@ -233,39 +258,53 @@ utilities.totalParams(model)
 # %% Training loop
 epochs = 10000
 
-# opt = torch.optim.Adam(model.parameters(), lr=1e-3)
-opt = torch.optim.Adam(model.parameters(), lr=1e-4)
+opt = torch.optim.Adam(
+    model.parameters(),
+    lr=1e-3
+    # lr=1e-4
+    # lr=1e-5
+)
 
-lmbda = 1e-5
+lmbda = 1e-4 #1e-5
 bestStatDict = model.state_dict()
 bestValLoss  = np.inf
+bestL1Err = np.inf
 lossFunc = F.mse_loss
-torchZero = torch.tensor([0.]).to(device)
 
 startTime = timer()
 for epoch in tqdm(range(1,epochs+1)):
 
     # Training
     opt.zero_grad()
-    soln =  model(trainBatch.reshape(-1,nInCells*nRFieldElems))
-    trainLoss = lossFunc(soln, outputTrain) + lmbda*utilities.L2Loss(model, device)
+    soln =  model(trainBatch.reshape(-1,nInCells*nRFieldElems).to(device))
+    trainLoss = lossFunc(soln, outputTrain) + \
+        lmbda*utilities.L2Loss(model, device)
     trainLoss.backward()
     opt.step()
 
+    L1ErrTrain = utilities.L1Err(soln, outputTrain)*100
+    L2ErrTrain = utilities.L2Err(soln, outputTrain)*100
+
     # Validation
     if (epoch)%100 == 0:
-        soln =  model(valBatch.reshape(-1,nInCells*nRFieldElems))
-        valLoss = lossFunc(soln, outputVal)
+        with torch.no_grad():
+            soln =  model(valBatch.reshape(-1,nInCells*nRFieldElems).to(device))
+            valLoss = lossFunc(soln, outputVal.to(device))
+            L1ErrVal = utilities.L1Err(soln, outputVal)*100
+            L2ErrVal = utilities.L2Err(soln, outputVal)*100
 
         print(
             # f' trainLoss:{trainLoss.item()*1e3:.3f}', \
             # f' valLoss:{valLoss.item()*1e3:.3f}', \
-            f' L1Err:{utilities.L1Err(soln, outputVal)*100:.1f}%', \
-            f' L2Err:{utilities.L2Err(soln, outputVal)*100:.1f}%', \
+            f' L1ErrTrain:{L1ErrTrain:.1f}%', f' L2ErrTrain:{L2ErrTrain:.1f}%', \
+            f' L1ErrVal:{L1ErrVal:.1f}%', f' L2ErrVal:{L2ErrVal:.1f}%', \
         )
-        if valLoss.item() < bestValLoss:
+        # if valLoss.item() < bestValLoss:
+        #     bestStateDict = model.state_dict()
+        #     bestValLoss = valLoss.item()
+        if L1ErrVal < bestL1Err:
             bestStateDict = model.state_dict()
-            bestValLoss = valLoss.item()
+            bestL1Err = L1ErrVal
             
 model.load_state_dict(bestStatDict)
 
@@ -273,7 +312,7 @@ endTime = timer()
 print(f'Training time = {endTime-startTime} s')
 
 # %% Test
-soln = model(testBatch.reshape(-1,nInCells*nRFieldElems))
+soln = model(testBatch.reshape(-1,nInCells*nRFieldElems).to(device))
 testLoss = lossFunc(soln, outputTest)
 print(
     f'trainLoss:{trainLoss.item()*1e3:.3f} ', \
@@ -283,18 +322,18 @@ print(
     f'L2Err:{utilities.L2Err(soln, outputTest)*100:.1f}% \n', \
 )
     
+# for s in [97,6,53]:
 for s in np.random.randint(0, len(testBatch), 5):
-    print('UHub = ', UHubTest[s]*UHubStd+UHubMean, 'TIHub = ', TIHubTest[s]*TIHubStd+TIHubMean)
-    testCaseInp =  testBatch[s].reshape(-1,nInCells*nRFieldElems)
+    print('##############################################\n')
+    print('Smaple #', s, '\n UHub =', \
+          (UHubTest[s]*UHubStd+UHubMean).item()* 100 // 10 / 10, 'TIHub =', \
+          (TIHubTest[s]*TIHubStd+TIHubMean).item()* 100 // 10 / 10
+    )
+    testCaseInp =  testBatch[s].reshape(-1,nInCells*nRFieldElems).to(device)
     UMagTestTrue, tkeTestTrue = UMagTest[s]*UMagMax, tkeTest[s]*tkeMax
     UMagTestPred, tkeTestPred = utilities.Net(model, testCaseInp, nOutCells)
     UMagTestPred, tkeTestPred = UMagTestPred[0]*UMagMax, tkeTestPred[0]*tkeMax
-    
-    print('L1 Error in U =', f'{utilities.L1Err(UMagTestTrue, UMagTestPred)*100:.1f} %')
-    print('L2 Error in U =', f'{utilities.L2Err(UMagTestTrue, UMagTestPred)*100:.1f} %')
-    print('L1 Error in k =', f'{utilities.L1Err(tkeTestTrue, tkeTestPred)*100:.1f} %')
-    print('L2 Error in k =', f'{utilities.L2Err(tkeTestTrue, tkeTestPred)*100:.1f} %')
-    
+
     UMagTestTrue = utilities.torchToNumpy(UMagTestTrue)
     UMagTestPred = utilities.torchToNumpy(UMagTestPred)
     tkeTestTrue = utilities.torchToNumpy(tkeTestTrue)
@@ -302,8 +341,13 @@ for s in np.random.randint(0, len(testBatch), 5):
     UMagDiff = np.abs(UMagTestTrue-UMagTestPred)
     tkeDiff = np.abs(tkeTestTrue-tkeTestPred)
     
-    # print('\n', 'True', UMagTestTrue,'\n', 'Pred', UMagTestPred)
-    # print('\n', 'True', tkeTestTrue,'\n', 'Pred', tkeTestPred)
+    print(' L1 Error in U =', f'{utilities.L1Err(UMagTestTrue, UMagTestPred)*100:.1f} %')
+    print(' L2 Error in U =', f'{utilities.L2Err(UMagTestTrue, UMagTestPred)*100:.1f} %')
+    print(' L1 Error in k =', f'{utilities.L1Err(tkeTestTrue, tkeTestPred)*100:.1f} %')
+    print(' L2 Error in k =', f'{utilities.L2Err(tkeTestTrue, tkeTestPred)*100:.1f} %')
+    
+    print('\n', 'True', UMagTestTrue,'\n', 'Pred', UMagTestPred)
+    print('\n', 'True', tkeTestTrue,'\n', 'Pred', tkeTestPred, '\n')
 
 # %% Contour yPlane
 yPlane = cCenter_WT[y0Plane_WT_idx]/D
@@ -329,7 +373,7 @@ CS5 = ax[5].scatter(yPlane[:,0], yPlane[:,2], c=tkeDiff[y0Plane_WT_idx], s=ms, n
 
 ax[0].set_title('DNN: UMag'), ax[1].set_title('DNN: k')
 ax[2].set_title('OpenFOAM: UMag'), ax[3].set_title('OpenFOAM: k')
-ax[4].set_title('| PINN-OpenFOAM |: UMag'), ax[5].set_title('| DNN-OpenFOAM |: k')
+ax[4].set_title('|DNN-OpenFOAM|: UMag'), ax[5].set_title('|DNN-OpenFOAM|: k')
 
 fig.colorbar(CS2, ax=ax[0], aspect=50)
 fig.colorbar(CS2, ax=ax[2], aspect=50)
@@ -363,7 +407,7 @@ CS5 = ax[5].scatter(zPlane[:,0], zPlane[:,1], c=tkeDiff[zhPlane_WT_idx], s=ms, n
 
 ax[0].set_title('DNN: UMag'), ax[1].set_title('DNN: k')
 ax[2].set_title('OpenFOAM: UMag'), ax[3].set_title('OpenFOAM: k')
-ax[4].set_title('| PINN-OpenFOAM |: : UMag'), ax[5].set_title('| DNN-OpenFOAM |: k')
+ax[4].set_title('|DNN-OpenFOAM|: UMag'), ax[5].set_title('|DNN-OpenFOAM|: k')
 
 fig.colorbar(CS2, ax=ax[0], aspect=50)
 fig.colorbar(CS2, ax=ax[2], aspect=50)
