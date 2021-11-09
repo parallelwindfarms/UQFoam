@@ -18,7 +18,8 @@ def getMeshData(vtkFile, D, h, ADloc, ny, nz, d_D, x_up_D_WT):
     mlMeshShape = tuple([nz, ny, nx_WT])
     
     startPlane_WT_idx = (cCenter_WT[:,0] == cCenter_WT[:,0].min())
-    endPlane_WT_idx   = (cCenter_WT[:,0] == cCenter_WT[:,0].max())
+    endPlane_WT_idx = (cCenter_WT[:,0] == cCenter_WT[:,0].max())
+    
     y0Plane_WT_idx = (cCenter_WT[:,1] > np.abs(cCenter_WT[:,1]).min()-1) * \
                      (cCenter_WT[:,1] < np.abs(cCenter_WT[:,1]).min()+1) * \
                      (cCenter_WT[:,2] < (h+2.*D))   

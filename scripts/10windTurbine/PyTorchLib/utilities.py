@@ -76,14 +76,11 @@ def splitIndices(n, valPct):
     return idxs[nVal:], idxs[:nVal]
 
 #%% Get CPU/GPU device
-def getDefaultDevice(cpu=False):
+def getDefaultDevice(gpu=0, cpu=False):
     """Pick GPU if available, else CPU"""
-    if cpu:
-        return torch.device('cpu')
-    elif torch.cuda.is_available():
-        return torch.device('cuda')
-    else:
-        return torch.device('cpu')
+    if torch.cuda.is_available():
+        return torch.device('cuda:'+str(gpu))
+    return torch.device('cpu')
 
 #%% Move model or data to chosen device
 def toDevice(data, device):

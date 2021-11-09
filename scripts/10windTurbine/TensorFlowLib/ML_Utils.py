@@ -25,6 +25,13 @@ concatenator = lambda a,b: np.concatenate((a.numpy(),b.numpy()), axis=-1)
 # Standardize
 standardizer = lambda x, mean, std: (x.numpy() - mean) / (std + 1e-16)
 
+# Relative Error in max norm
+def max_norm(y_true , y_pred):
+    SMALL = 1e-16
+    y_true, y_pred = tf.cast(y_true, fdtype), tf.cast(y_pred, fdtype)
+    relErr = tf.divide(tf.abs(y_true-y_pred), tf.abs(y_true) + SMALL)
+    return relErr.max()
+
 # Relative Error in L1 norm
 def L1(y_true , y_pred):
     SMALL = 1e-16

@@ -7,6 +7,7 @@ from __future__ import print_function
 import os, sys
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 import tensorflow as tf
@@ -32,8 +33,9 @@ randomSeed = 42
 np.random.seed = 42
 
 # %% Hyper-parameters
-mlMeshName = 'M128/'
-# mlMeshName = 'M64/'
+mlMeshName = None
+# mlMeshName = 'M128/'
+mlMeshName = 'M64/'
 
 # %% Case details
 caseName   = cwd.split('/')[-2]
@@ -90,7 +92,7 @@ fileList = generator.fileList
 
 # %% Model
 isUNet, isUNetAug = 1, 0
-transposed = 1
+transposed = 0
 
 if isUNet:
     if transposed:
@@ -127,7 +129,7 @@ elif isUNetAug:
     
 model.summary()
 
-s = len(train_data) * 10
+s = len(train_data) * 20
 lr = 1e-3
 lrS = tf.keras.optimizers.schedules.ExponentialDecay(lr, s, 0.9)
 opt = tf.keras.optimizers.Adam(lrS, beta_1=0.9, beta_2=0.999)
@@ -140,19 +142,21 @@ model.compile(optimizer=opt, loss='mae', metrics=[L1, L2])
 # %% Train the model
 epochs = 10000
 
-history = model.fit(
-    train_data.shuffle(len(train_data)),
-    validation_data=valid_data,
-    callbacks=cbs, epochs=epochs
+model.fit(train_data.shuffle(len(train_data)), 
+          validation_data=valid_data,
+          callbacks=cbs, epochs=epochs
 )
 
 print('Latest lr =',opt._decayed_lr(tf.float32))
 
 # %% Plot losses and errors
-fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(8,3), dpi=150)
+fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(10,4), dpi=150)
 
-history[['loss', 'val_loss']].plot(ax=ax[0])
-history[['L1', 'L2', 'val_L1', 'val_L2']].plot(ax=ax[1])
+try: df
+except NameError: df = pd.DataFrame(model.history.history)
+ 
+df[['loss', 'val_loss']].plot(ax=ax[0])
+df[['L1', 'L2', 'val_L1', 'val_L2']].plot(ax=ax[1])
 
 ax[0].set_ylabel('MAE Loss')
 ax[0].set_xlabel('Epoch')
@@ -182,6 +186,7 @@ else:
     y_pred = model.predict(data)
     
 check_idx = np.random.randint(0, len(data), 5)
+
 for s, test_case in enumerate(data):
     if s in check_idx:
         print('##############################################\n')
@@ -206,7 +211,7 @@ for s, test_case in enumerate(data):
               '\n'
         )
         
-        print(' U:',
+        print(' U: ',
               'L1 Error =',f'{L1(UMagTestTrue,UMagTestPred)*100:.1f} %',
               'L2 Error =',f'{L2(UMagTestTrue,UMagTestPred)*100:.1f} %'
         )
@@ -221,53 +226,61 @@ for s, test_case in enumerate(data):
         print('\n', 'TI: True', TITestTrue[random_idx],\
               '\n', 'TI: Pred', TITestPred[random_idx], '\n')
 
-# %% Plotting
-plot_soln = lambda ax, soln, plane, norm=None, cmap=None: ax.imshow(
-    soln[plane].reshape(-1,mlMeshShape[0])[::-1], aspect='auto', 
-    norm=norm, cmap=cmap, interpolation=None#'bicubic'
-)
-err_max_pct = 0.1
-
-# Contour Plots
-fig, ax = plt.subplots(ncols=3, nrows=4, constrained_layout=True, 
-                       sharex=True, figsize=(16,6))
-ax, CS = ax.flat, [0]*12
-
-CS[0] = plot_soln(ax[0], UMagTestTrue, y0Plane_WT_idx)
-CS[1] = plot_soln(ax[1], UMagTestPred, y0Plane_WT_idx)
-norm = plt.Normalize(0, UMagTestTrue[y0Plane_WT_idx].max()*err_max_pct)
-CS[2] = plot_soln(ax[2], UMagDiff, y0Plane_WT_idx, norm, cmap='gray')
-
-CS[3] = plot_soln(ax[3], TITestTrue, y0Plane_WT_idx)
-CS[4] = plot_soln(ax[4], TITestPred, y0Plane_WT_idx)
-norm = plt.Normalize(0, TITestTrue[y0Plane_WT_idx].max()*err_max_pct)
-CS[5] = plot_soln(ax[5], TIDiff, y0Plane_WT_idx, norm, cmap='gray')
-
-CS[6] = plot_soln(ax[6], UMagTestTrue, zhPlane_WT_idx)
-CS[7] = plot_soln(ax[7], UMagTestPred, zhPlane_WT_idx)
-norm = plt.Normalize(0, UMagTestTrue[zhPlane_WT_idx].max()*err_max_pct)
-CS[8] = plot_soln(ax[8], UMagDiff, zhPlane_WT_idx, norm, cmap='gray')
-
-CS[9] = plot_soln(ax[9], TITestTrue, zhPlane_WT_idx)
-CS[10] = plot_soln(ax[10], TITestPred, zhPlane_WT_idx)
-norm = plt.Normalize(0, TITestTrue[zhPlane_WT_idx].max()*err_max_pct)
-CS[11] = plot_soln(ax[11], TIDiff, zhPlane_WT_idx, norm, cmap='gray')
-
-for i in range(12):
-    ax[i].set_xticks([])
-    ax[i].set_yticks([])
-    if i in [1,4,7,10]:
-        fig.colorbar(CS[i-1], ax=ax[i], aspect=50)
-    else:
-        fig.colorbar(CS[i], ax=ax[i], aspect=50)
-
-ax[0].set_title('OpenFOAM (True)')
-ax[1].set_title('U-Net (Pred)')
-ax[2].set_title('|Error|')
-ax[0].set_ylabel('UMag')
-ax[3].set_ylabel('TI')
-ax[6].set_ylabel('UMag')
-ax[9].set_ylabel('TI')
-
-
-
+        ## %% Plotting
+        plot_soln = lambda ax, soln, plane, norm=None: ax.imshow(
+            soln[plane].reshape(-1,mlMeshShape[0])[::-1], 
+            aspect='auto', 
+            norm=norm
+        )
+        err_max_pct = 0.1
+        
+        # Contour Plots
+        fig, ax = plt.subplots(ncols=3, nrows=4, constrained_layout=True, 
+                               sharex=True, figsize=(16,6))
+        ax, CS = ax.flat, [0]*12
+        
+        CS[0] = plot_soln(ax[0], UMagTestTrue, y0Plane_WT_idx)
+        CS[1] = plot_soln(ax[1], UMagTestPred, y0Plane_WT_idx)
+        norm = plt.Normalize(0, UMagTestTrue[y0Plane_WT_idx].max()*err_max_pct)
+        CS[2] = plot_soln(ax[2], UMagDiff, y0Plane_WT_idx, norm)
+        
+        CS[3] = plot_soln(ax[3], TITestTrue, y0Plane_WT_idx)
+        CS[4] = plot_soln(ax[4], TITestPred, y0Plane_WT_idx)
+        norm = plt.Normalize(0, TITestTrue[y0Plane_WT_idx].max()*err_max_pct)
+        CS[5] = plot_soln(ax[5], TIDiff, y0Plane_WT_idx, norm)
+        
+        CS[6] = plot_soln(ax[6], UMagTestTrue, zhPlane_WT_idx)
+        CS[7] = plot_soln(ax[7], UMagTestPred, zhPlane_WT_idx)
+        norm = plt.Normalize(0, UMagTestTrue[zhPlane_WT_idx].max()*err_max_pct)
+        CS[8] = plot_soln(ax[8], UMagDiff, zhPlane_WT_idx, norm)
+        
+        CS[9] = plot_soln(ax[9], TITestTrue, zhPlane_WT_idx)
+        CS[10] = plot_soln(ax[10], TITestPred, zhPlane_WT_idx)
+        norm = plt.Normalize(0, TITestTrue[zhPlane_WT_idx].max()*err_max_pct)
+        CS[11] = plot_soln(ax[11], TIDiff, zhPlane_WT_idx, norm)
+        
+        for i in range(12):
+            ax[i].set_xticks([])
+            ax[i].set_yticks([])
+            if i in [1,4,7,10]:
+                fig.colorbar(CS[i-1], ax=ax[i], aspect=50)
+            else:
+                fig.colorbar(CS[i], ax=ax[i], aspect=50)
+        
+        ax[0].set_title('OpenFOAM (True)')
+        ax[1].set_title('U-Net (Pred)')
+        ax[2].set_title('|True - Pred|')
+        ax[0].set_ylabel('UMag')
+        ax[3].set_ylabel('TI')
+        ax[6].set_ylabel('UMag')
+        ax[9].set_ylabel('TI')
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        

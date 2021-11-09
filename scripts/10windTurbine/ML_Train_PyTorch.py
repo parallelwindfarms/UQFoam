@@ -29,7 +29,7 @@ import myUQlib
 import nets, utilities
 from ML_GetFuncs import getMeshData, getCaseData
 
-device = utilities.getDefaultDevice()
+device = utilities.getDefaultDevice(3)
 print(f'Using device: {device}')
 
 randomSeed = 42
@@ -260,12 +260,12 @@ epochs = 10000
 
 opt = torch.optim.Adam(
     model.parameters(),
-    lr=1e-3
-    # lr=1e-4
+    # lr=1e-3
+    lr=1e-4
     # lr=1e-5
 )
 
-lmbda = 1e-4 #1e-5
+lmbda = 1e-3 #1e-5
 bestStatDict = model.state_dict()
 bestValLoss  = np.inf
 bestL1Err = np.inf
@@ -355,7 +355,7 @@ yPlane = cCenter_WT[y0Plane_WT_idx]/D
 fig, ax = plt.subplots(ncols=2, nrows=3, constrained_layout=True,
                         sharey=True, sharex=True, figsize=(10,6))
 ax = ax.flat
-ms = 15
+ms = 25
 
 norm = plt.Normalize(UMagTestTrue[y0Plane_WT_idx].min(), UMagTestTrue[y0Plane_WT_idx].max())
 CS0 = ax[0].scatter(yPlane[:,0], yPlane[:,2], c=UMagTestPred[y0Plane_WT_idx], s=ms, norm=norm)
@@ -389,7 +389,6 @@ zPlane = cCenter_WT[zhPlane_WT_idx]/D
 fig, ax = plt.subplots(ncols=2, nrows=3, constrained_layout=True,
                         sharey=True, sharex=True, figsize=(10,6))
 ax = ax.flat
-ms = 15
 
 norm = plt.Normalize(UMagTestTrue[zhPlane_WT_idx].min(), UMagTestTrue[zhPlane_WT_idx].max())
 CS0 = ax[0].scatter(zPlane[:,0], zPlane[:,1], c=UMagTestPred[zhPlane_WT_idx], s=ms, norm=norm)
