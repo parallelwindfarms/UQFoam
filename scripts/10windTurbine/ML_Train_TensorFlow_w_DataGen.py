@@ -9,7 +9,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 import tensorflow as tf
 import tensorflow.keras.callbacks as callbacks
 
@@ -24,18 +23,19 @@ sys.path.append(SCRIPTS+'/10windTurbine'+'/TensorFlowLib')
 
 import myUQlib
 from ML_GetFuncs import getMeshData, getCaseData
-from ML_Models import UNet, UNetAug
-from ML_Utils import enableGPUMemGro, dataGenerator, L1, L2
+from ML_Models import UNet
+from ML_Utils import enableGPUMemGro, set_global_determinism
+from ML_Utils import dataGenerator, L1, L2
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2,3'
+set_global_determinism()
 enableGPUMemGro()
 
-randomSeed = 42
-np.random.seed = 42
-
 # %% Hyper-parameters
-mlMeshName = None
-# mlMeshName = 'M128/'
-mlMeshName = 'M64/'
+mlMeshName, BATCH_SIZE = 'M128/', 2
+# mlMeshName, BATCH_SIZE = 'M64/', 2
 
 # %% Case details
 caseName   = cwd.split('/')[-2]
@@ -77,58 +77,56 @@ for WT_num in range(1,2):
     mesh, nCells, mlMeshShape, nCells_WT, cCenter_WT, \
         cCenterWT_idx, startPlane_WT_idx, endPlane_WT_idx, \
         y0Plane_WT_idx, zhPlane_WT_idx, cellsInDiskAtHubHeight = \
-        getMeshData(vtkFile, D, h, ADloc(WT_num), ny, nz, d_D, x_up_D_WT)
+        getMeshData(
+            vtkFile, D, h, ADloc(WT_num), 
+            ny, nz, d_D, x_up_D_WT
+        )
         
-    UMagDet, UHubDet, defUDet, tkeDet, TIDet, TIHubDet, RDet, ADet, nutDet = \
-        getCaseData(myUQlib, mesh, nCells_WT, cCenterWT_idx, 
-                        cellsInDiskAtHubHeight, Uref)
+    UMagDet, UHubDet, defUDet, tkeDet, TIDet, \
+        TIHubDet, RDet, ADet, nutDet, C_vecDet = \
+        getCaseData(
+            myUQlib, mesh, nCells_WT, cCenterWT_idx, 
+            cellsInDiskAtHubHeight, Uref
+        )
         
     print('UHubDet TIHubDet:', UHubDet, TIHubDet)
 
 # %% Data generator
 fileNames = [mlDataDir+mlMeshName+'sample_'+str(i) for i in range(1000)] #IMP!
-generator = dataGenerator(fileNames, mlMeshShape, batchSize=2)
+generator = dataGenerator(fileNames, mlMeshShape, batchSize=BATCH_SIZE)
 fileList = generator.fileList
 
 # %% Model
-isUNet, isUNetAug = 1, 0
-transposed = 0
+isUNet = 0
+transposed = 1
 
 if isUNet:
     if transposed:
         model = UNet(
             mlMeshShape, dropFrac=0.1, l1_lambda=1e-3, convType='transposed'
         )    
-        modelName = mlDir+'models/UNet_DataGen_transposed_'+\
-            mlMeshName[:-1]+'.h5'
+        modelName = mlDir+'models/UNet_transposed_'+ mlMeshName[:-1]+'.h5'
     else:
         model = UNet(
             mlMeshShape, dropFrac=0.1, l1_lambda=1e-3, convType='upsampled'
         )    
-        modelName = mlDir+'models/UNet_DataGen_upsampled_'+\
-            mlMeshName[:-1]+'.h5'
-    
+        modelName = mlDir+'models/UNet_upsampled_'+ mlMeshName[:-1]+'.h5'
+
     ioData = generator.UNetIOData
     train_data, valid_data, test_data = generator.UNetIOBatchedSplitData    
-elif isUNetAug:
-    if transposed:
-        model = UNetAug(
-            mlMeshShape, dropFrac=0.1, l1_lambda=1e-3, convType='transposed'
-        )
-        modelName = mlDir+'models/UNetAug_DataGen_transposed_'+\
-            mlMeshName[:-1]+'.h5'
-    else:
-        model = UNetAug(
-            mlMeshShape, dropFrac=0.1, l1_lambda=1e-3, convType='upsampled'
-        )
-        modelName = mlDir+'models/UNetAug_DataGen_upsampled_'+\
-            mlMeshName[:-1]+'.h5'
-
-    ioData = generator.UNetAugIOData
-    train_data, valid_data, test_data = generator.UNetAugIOBatchedSplitData
+else:
+    model = UNet(
+        mlMeshShape, nRandFieldsChannels=4, dropFrac=0.1, 
+        l1_lambda=1e-3, convType='transposed'
+    )    
+    modelName = mlDir+'models/UNet_transposed_C_vec_'+ mlMeshName[:-1]+'.h5'
+    ioData = generator.UNetIOData
+    train_data, valid_data, test_data = generator.UNetIOBatchedSplitData 
     
 model.summary()
 
+# %% Model Parameters
+epochs = 1000
 s = len(train_data) * 20
 lr = 1e-3
 lrS = tf.keras.optimizers.schedules.ExponentialDecay(lr, s, 0.9)
@@ -140,16 +138,14 @@ cbs = [callbacks.ModelCheckpoint(modelName, save_best_only=True),
 model.compile(optimizer=opt, loss='mae', metrics=[L1, L2])
 
 # %% Train the model
-epochs = 10000
-
 model.fit(train_data.shuffle(len(train_data)), 
           validation_data=valid_data,
           callbacks=cbs, epochs=epochs
 )
 
+# %% Get latet lr and plot losses and errors
 print('Latest lr =',opt._decayed_lr(tf.float32))
 
-# %% Plot losses and errors
 fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(10,4), dpi=150)
 
 try: df
@@ -163,8 +159,11 @@ ax[0].set_xlabel('Epoch')
 ax[1].set_ylabel('Relative Error')
 ax[1].set_xlabel('Epoch')
 
+# ax[1].set_ylim(0,0.5)
+# ax[0].set_ylim(m0,1)
+
 # %% Check few cases in test_data
-load_model = 0
+load_model = 0 ###
 
 # From the Data Processing Step
 UHub_mean, UHub_std = (6.279, 1.967)
@@ -176,8 +175,9 @@ data = test_data
 
 # Load the model
 if load_model:
-    dependencies = {'L1': L1, 'L2': L2}
-    loaded_model_name = mlDir+'models/UNet_DataGen_transposed_M64_best.h5'
+    # dependencies = {'L1': L1, 'L2': L2}
+    dependencies = {'relErrL1': L1, 'relErrL2': L2}
+    loaded_model_name = mlDir+'models/UNet_DataGen_transposed_M64_first_best.h5'
     loaded_model = tf.keras.models.load_model(
         loaded_model_name, custom_objects=dependencies
     )
@@ -185,11 +185,12 @@ if load_model:
 else:
     y_pred = model.predict(data)
     
-check_idx = np.random.randint(0, len(data), 5)
+# check_idx = np.random.randint(0, len(data), 5)
+check_idx = [49,  3,  1,  5, 53, 25, 88, 59, 40, 28]
 
 for s, test_case in enumerate(data):
     if s in check_idx:
-        print('##############################################\n')
+        print('#'*100+'\n')
         print('Smaple #',s,'\n')
         y_true = test_case[1][0]
         UMagTestTrue = y_true[:,:,:,0].numpy().reshape(-1)
@@ -199,15 +200,15 @@ for s, test_case in enumerate(data):
         UMagDiff = np.abs(UMagTestTrue-UMagTestPred).reshape(-1)
         TIDiff = np.abs(TITestTrue-TITestPred).reshape(-1)
         
-        if isUNetAug:
-            UHubTest = test_case[0][1].numpy()[0,0]
-            TIHubTest = test_case[0][1].numpy()[0,1]     
+        if not isUNet:
+            UHubTest = test_case[0][0][0,0,0,2].numpy()
+            TIHubTest = test_case[0][0][0,0,0,3].numpy()
         else:
             UHubTest = test_case[0][0][0,0,0,6].numpy()
             TIHubTest = test_case[0][0][0,0,0,7].numpy()
 
-        print(' UHub =', (UHubTest*UHub_std+UHub_mean).item()*100//10/10, \
-              'TIHub =', (TIHubTest*TIHub_std+TIHub_mean).item()*100//10/10, 
+        print(' UHub =',(UHubTest*UHub_std+UHub_mean).item()*100//10/10, \
+              'TIHub =',(TIHubTest*TIHub_std+TIHub_mean).item()*100//10/10, 
               '\n'
         )
         
@@ -232,7 +233,7 @@ for s, test_case in enumerate(data):
             aspect='auto', 
             norm=norm
         )
-        err_max_pct = 0.1
+        err_pct = 0.1
         
         # Contour Plots
         fig, ax = plt.subplots(ncols=3, nrows=4, constrained_layout=True, 
@@ -241,22 +242,22 @@ for s, test_case in enumerate(data):
         
         CS[0] = plot_soln(ax[0], UMagTestTrue, y0Plane_WT_idx)
         CS[1] = plot_soln(ax[1], UMagTestPred, y0Plane_WT_idx)
-        norm = plt.Normalize(0, UMagTestTrue[y0Plane_WT_idx].max()*err_max_pct)
+        norm = plt.Normalize(0, UMagTestTrue[y0Plane_WT_idx].max()*err_pct)
         CS[2] = plot_soln(ax[2], UMagDiff, y0Plane_WT_idx, norm)
         
         CS[3] = plot_soln(ax[3], TITestTrue, y0Plane_WT_idx)
         CS[4] = plot_soln(ax[4], TITestPred, y0Plane_WT_idx)
-        norm = plt.Normalize(0, TITestTrue[y0Plane_WT_idx].max()*err_max_pct)
+        norm = plt.Normalize(0, TITestTrue[y0Plane_WT_idx].max()*err_pct)
         CS[5] = plot_soln(ax[5], TIDiff, y0Plane_WT_idx, norm)
         
         CS[6] = plot_soln(ax[6], UMagTestTrue, zhPlane_WT_idx)
         CS[7] = plot_soln(ax[7], UMagTestPred, zhPlane_WT_idx)
-        norm = plt.Normalize(0, UMagTestTrue[zhPlane_WT_idx].max()*err_max_pct)
+        norm = plt.Normalize(0, UMagTestTrue[zhPlane_WT_idx].max()*err_pct)
         CS[8] = plot_soln(ax[8], UMagDiff, zhPlane_WT_idx, norm)
         
         CS[9] = plot_soln(ax[9], TITestTrue, zhPlane_WT_idx)
         CS[10] = plot_soln(ax[10], TITestPred, zhPlane_WT_idx)
-        norm = plt.Normalize(0, TITestTrue[zhPlane_WT_idx].max()*err_max_pct)
+        norm = plt.Normalize(0, TITestTrue[zhPlane_WT_idx].max()*err_pct)
         CS[11] = plot_soln(ax[11], TIDiff, zhPlane_WT_idx, norm)
         
         for i in range(12):
@@ -275,12 +276,5 @@ for s, test_case in enumerate(data):
         ax[6].set_ylabel('UMag')
         ax[9].set_ylabel('TI')
         
-        
-        
-        
-        
-        
-        
-        
-        
-        
+# %% End
+print('Program ran successfully!\n')

@@ -209,43 +209,27 @@ def getSymmTensorValues(symmTensor, nCells):
 
 # %% Bary Centric Coordinates
 def baryCentricCoordinates(eigValsArray):
-
     if eigValsArray.ndim==2 :
         numElem = eigValsArray.shape[0]
 
         C_vec = np.zeros((numElem, 2))
-
+        e1, e2, e3 = np.array([1,0]), np.array([-1,0]), np.array([0,np.sqrt(3)])
+        
         for n in range(numElem):
             eigVals = eigValsArray[n]
-
-            # eigVals.sort()
-            # eigVals = eigVals[::-1]
-            # print('eigVals =', eigVals)
             C = [ eigVals[0] - eigVals[1] ]
             C.append(2*(eigVals[1] - eigVals[2]))
             C.append(3*eigVals[2] + 1)
-            # print('C = ', C)
-            e1 = np.array([1,0]); e2 = np.array([-1,0]); e3 = np.array([0,np.sqrt(3)])
-
             C_vec[n] = C[0]*e1 + C[1]*e2 + C[2]*e3
-
-        return C_vec
 
     else:
         eigVals = eigValsArray
-
-        # eigVals.sort()
-        # eigVals = eigVals[::-1]
-        # print('eigVals =', eigVals)
         C = [ eigVals[0] - eigVals[1] ]
         C.append(2*(eigVals[1] - eigVals[2]))
         C.append(3*eigVals[2] + 1)
-        # print('C = ', C)
-        e1 = np.array([1,0]); e2 = np.array([-1,0]); e3 = np.array([0,np.sqrt(3)])
-
         C_vec = C[0]*e1 + C[1]*e2 + C[2]*e3
 
-        return C_vec
+    return C_vec
 
 # %% Return Anisotropy Tensor A
 def anisotropyTensor(R, tke, nCells):
@@ -253,7 +237,6 @@ def anisotropyTensor(R, tke, nCells):
 
 # %% Compute eigen decompistion of a tensor field
 def eigenDecomposition(tensorField, nCells):
-
     eVals, eVecs = np.linalg.eig(tensorField)
     idx = eVals.argsort(axis=-1)[:,::-1]
     for c in range(nCells):
@@ -266,12 +249,10 @@ def eigenDecomposition(tensorField, nCells):
 def anisotropyTensorPert(eVec,eVal,nCells):
     a_ij = np.array([np.matmul(eVec[c], np.matmul(np.diag(eVal[c]),eVec[c].T))
                                         for c in range(nCells)])
-
     return a_ij
 
 # %% Sampling three r.v.s with zero mean
 def sampleThreeNormalRVsWithZeroMean(nSamples, sigma, seedValue):
-
     eValPert = np.zeros((nSamples, 3))
 
     dist = cp.Iid(cp.Normal(0,sigma), 2)
@@ -281,8 +262,6 @@ def sampleThreeNormalRVsWithZeroMean(nSamples, sigma, seedValue):
 
     eValPert[:, 2] = -eValPert[:,0] -eValPert[:,1]
 
-    # print(f'{eValPert}')
-    # print(f'sum of eVal*s   = {eValPert.sum(axis=1)}')
     print(f'mean of samples = {eValPert.mean(axis=0)}')
 
     return eValPert
@@ -293,5 +272,4 @@ def addPerturbationToEigenvalues(eVal, zeroMeanRVSamples, nSamples, nCells):
     for s in range(nSamples):
         eValPertSmaples[s] = eVal  + zeroMeanRVSamples[s]
         # eValPertSmaples[s] = eVal * (1 + zeroMeanRVSamples[s])
-
     return eValPertSmaples

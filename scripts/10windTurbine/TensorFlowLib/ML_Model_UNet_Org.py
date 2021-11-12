@@ -3,7 +3,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Input, Conv3D, Conv3DTranspose
 from tensorflow.keras.layers import concatenate, UpSampling3D
 from tensorflow.keras.layers import Dropout, BatchNormalization
-from tensorflow.keras.layers import ReLU, LeakyReLU, ELU
+from tensorflow.keras.layers import ReLU, LeakyReLU
 from tensorflow.keras.regularizers import l1
 
 # %% UNetBlock
@@ -11,31 +11,38 @@ def convBlock(name='NO_NAME', nOutChannels=None, convType=None, kernelSize=4,
               stride=2, activation='relu', kernelInitializer='he_normal',
               padding='same', batchNorm=True, dropFrac=0., l1_lambda=0.):
 
-    if activation=='relu':
-        activation = ReLU()
-    elif activation=='leaky_relu':
-        activation = LeakyReLU()
-    elif activation=='elu':
-        activation = ELU()
-    else:
-        activation = None
-
     block = Sequential(name=name)
+    
+    if activation=='relu':
+        block.add(ReLU())
+    elif activation=='leaky_relu':
+        block.add(LeakyReLU())
 
     if convType=='upsampled':
         block.add(UpSampling3D(size=2))
-        block.add(Conv3D(nOutChannels, kernelSize-1, strides=1,
-                         activation=activation, padding=padding,
-                         kernel_initializer=kernelInitializer,
-                         kernel_regularizer=l1(l1_lambda)))
+        block.add(Conv3D(
+            nOutChannels, kernelSize-1, 
+            strides=1, padding=padding,
+            kernel_initializer=kernelInitializer,
+            kernel_regularizer=l1(l1_lambda)
+            )
+        )
     elif convType=='transposed':
-        block.add(Conv3DTranspose(nOutChannels, kernelSize, strides=stride,
-                                  activation=activation, padding=padding,
-                                  kernel_initializer=kernelInitializer))
+        block.add(Conv3DTranspose(
+            nOutChannels, kernelSize, 
+            strides=stride, padding=padding,
+            kernel_initializer=kernelInitializer,
+            kernel_regularizer=l1(l1_lambda)
+            )
+        )
     else:
-        block.add(Conv3D(nOutChannels, kernelSize, strides=stride,
-                         activation=activation, padding=padding,
-                         kernel_initializer=kernelInitializer))
+        block.add(Conv3D(
+            nOutChannels, kernelSize, 
+            strides=stride, padding=padding,
+            kernel_initializer=kernelInitializer,
+            kernel_regularizer=l1(l1_lambda)
+            )
+        )
 
     if batchNorm:
         block.add(BatchNormalization())
@@ -45,8 +52,7 @@ def convBlock(name='NO_NAME', nOutChannels=None, convType=None, kernelSize=4,
     return block
 
 # %% UNet Model
-def UNet(meshShape, nRandFieldsChannels=8, nOutChannels=2, dropFrac=0., 
-         channels=64, l1_lambda=0., convType='upsampled'):
+def UNet(meshShape, nRandFieldsChannels=8, nOutChannels=2, dropFrac=0., channels=64, l1_lambda=0., convType='upsampled'):
 
     # Clear Session
     tf.keras.backend.clear_session()
@@ -62,10 +68,10 @@ def UNet(meshShape, nRandFieldsChannels=8, nOutChannels=2, dropFrac=0.,
 
     # Hidden Layers
     if meshShape[0]==128:
-        cLayer_i = convBlock('cLayer_i', channels, activation=None, dropFrac=0., batchNorm=False, l1_lambda=l1_lambda)
+        cLayer_i = convBlock('cLayer_i', channels, activation=None, dropFrac=0., batchNorm=False)
         cLayer_0 = convBlock('cLayer_0', channels*2, activation=act, dropFrac=dropFrac, l1_lambda=l1_lambda)
     elif meshShape[0]==64:
-        cLayer_0 = convBlock('cLayer_0', channels*2, activation=None, dropFrac=0., batchNorm=False, l1_lambda=l1_lambda)
+        cLayer_0 = convBlock('cLayer_0', channels*2, activation=None, dropFrac=0., batchNorm=False)
 
     cLayer_1 = convBlock('cLayer_1', channels*2, activation=act, dropFrac=dropFrac, l1_lambda=l1_lambda)
     cLayer_2 = convBlock('cLayer_2', channels*4, activation=act, dropFrac=dropFrac, l1_lambda=l1_lambda)
@@ -83,7 +89,7 @@ def UNet(meshShape, nRandFieldsChannels=8, nOutChannels=2, dropFrac=0.,
         dLayer_0 = convBlock('dLayer_0', channels, convType=convType, dropFrac=dropFrac, l1_lambda=l1_lambda)
 
     # Output Layer
-    dLayer_o = convBlock('dLayer_o', nOutChannels, convType='transposed', dropFrac=0., batchNorm=False, l1_lambda=l1_lambda)
+    dLayer_o = convBlock('dLayer_o', nOutChannels, convType='transposed', dropFrac=0., batchNorm=False)
 
     # Model
     if meshShape[0]==128:
@@ -110,7 +116,7 @@ def UNet(meshShape, nRandFieldsChannels=8, nOutChannels=2, dropFrac=0.,
     elif meshShape[0]==64:
         dOut_o = dLayer_o(dOut_1_cOut_i)
 
-    model = tf.keras.Model(inputs=[randFields], outputs=[dOut_o], name='UNet_UQ')
+    model = tf.keras.Model(inputs=[randFields], outputs=[dOut_o], name='UNetAug')
 
     return model
 

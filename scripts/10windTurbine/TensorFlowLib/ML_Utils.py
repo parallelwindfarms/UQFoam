@@ -1,6 +1,33 @@
+import os
 import numpy as np
 import pickle
 import tensorflow as tf
+import random
+
+# %% Global Seeding for Reproducibility
+def set_global_determinism(seed=42, fast_n_close=False):
+    """
+        Enable 100% reproducibility on operations related to 
+        tensor and randomness.
+        https://suneeta-mall.github.io/2019/12/22/Reproducible-ml-tensorflow.html
+
+        Parameters:
+        seed (int): seed value for global randomness
+        fast_n_close (bool): whether to achieve efficient at 
+        the cost of determinism/reproducibility
+    """
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    random.seed(seed)
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+    
+    if fast_n_close:
+        return
+    
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    tf.config.threading.set_inter_op_parallelism_threads(1)
+    tf.config.threading.set_intra_op_parallelism_threads(1)
 
 # %% Enable GPU Memory Growth
 def enableGPUMemGro():
@@ -63,17 +90,21 @@ def loadPickledSamplesAtInputFields(s, meshShape):
     TIHub = tf.py_function(standardizer, [TIHub, TIHub_mean, TIHub_std], [fdtype])
     TIHub_field = tf.py_function(point_to_field, [TIHub, meshShape], [fdtype])
     
-    data = tf.py_function(concatenator, [UHub_field, TIHub_field], [fdtype])
-    data = tf.reshape(data, [*meshShape,2])
-    # return data
+    dataHub = tf.py_function(concatenator, [UHub_field, TIHub_field], [fdtype])
+    dataHub = tf.reshape(dataHub, [*meshShape,2])
     
-    AData = tf.py_function(pklLoader, [s+'/A.pkl'], [fdtype])
-    # AData = tf.py_function(pklLoader, [s+'/R.pkl'], [fdtype])
-    AData = tf.reshape(AData, [*meshShape,6])
-    # return AData
+    # AData = tf.py_function(pklLoader, [s+'/A.pkl'], [fdtype])
+    # AData = tf.reshape(AData, [*meshShape,6])
     
-    conc_data = tf.py_function(concatenator, [AData, data], [fdtype])
-    conc_data = tf.reshape(conc_data, [*meshShape,8])
+    # conc_data = tf.py_function(concatenator, [AData, dataHub], [fdtype])
+    # conc_data = tf.reshape(conc_data, [*meshShape,8])
+    
+    C_vec = tf.py_function(pklLoader, [s+'/C_vec.pkl'], [fdtype])
+    C_vec = tf.reshape(C_vec, [*meshShape,2])
+    
+    conc_data = tf.py_function(concatenator, [C_vec, dataHub], [fdtype])
+    conc_data = tf.reshape(conc_data, [*meshShape,4])
+
     return conc_data
 
 # Hub Data (Point)
@@ -96,7 +127,6 @@ def loadPklSamplesAData(s, meshShape):
 def loadPklSamplesOutputFields(s, meshShape):
     UMag = tf.py_function(pklLoader, [s+'/UMag.pkl'], [fdtype])
     TI = tf.py_function(pklLoader, [s+'/TI.pkl'], [fdtype])
-    # TI = tf.py_function(pklLoader, [s+'/k.pkl'], [fdtype])
     data = tf.py_function(concatenator, [UMag, TI], [fdtype])
     data = tf.reshape(data, [*meshShape,2])
     return data
@@ -124,7 +154,6 @@ def batchSplitData(data, trainFrac, batchSize):
     
         train_data_batched = train_data.batch(batchSize).cache().prefetch(1)
         valid_data_batched = valid_data.batch(batchSize).cache().prefetch(1)
-        # test_data_batched = test_data.batch(batchSize).cache().prefetch(1)
         test_data_batched = test_data.batch(1).cache().prefetch(1)
     
         return train_data_batched, valid_data_batched, test_data_batched
@@ -145,7 +174,7 @@ class dataGenerator():
         self.hubData, self.AData, self.input_fields, self.output_fields = \
             loadData(self.fileList, self.meshShape)
         
-        # Dat for UNet Model
+        # Data for UNet Model
         self.UNetIOData = tf.data.Dataset.zip(
             (self.input_fields, self.output_fields)
         )
@@ -153,11 +182,3 @@ class dataGenerator():
             self.UNetIOData, self.trainFrac, self.batchSize
         )
         
-        # Data for UNetAug Model
-        input_ = tf.data.Dataset.zip((self.AData, self.hubData))
-        self.UNetAugIOData = tf.data.Dataset.zip(
-            (input_, self.output_fields)
-        )
-        self.UNetAugIOBatchedSplitData = batchSplitData(
-            self.UNetAugIOData, self.trainFrac, self.batchSize
-        )

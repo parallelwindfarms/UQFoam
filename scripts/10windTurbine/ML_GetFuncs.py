@@ -50,8 +50,12 @@ def getCaseData(myUQlib, mesh, nCells_WT, cCenterWT_idx,
     A = myUQlib.anisotropyTensor(
         myUQlib.symmTensorToTensorv2021(R, nCells_WT), tke, nCells_WT
     )
-    A = myUQlib.getSymmTensorValues(A, nCells_WT)
 
     nut = np.array(mesh.cell_data['nut'][cCenterWT_idx])
+    
+    eVals, eVecs = myUQlib.eigenDecomposition(A, nCells_WT)
+    C_vec = myUQlib.baryCentricCoordinates(eVals)
+    
+    A = myUQlib.getSymmTensorValues(A, nCells_WT)
 
-    return  UMag, UHub, defU, tke, TI, TIHub, R, A, nut
+    return  UMag, UHub, defU, tke, TI, TIHub, R, A, nut, C_vec
