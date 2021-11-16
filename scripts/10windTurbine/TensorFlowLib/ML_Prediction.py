@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# %% Import Required Modules and env vars
+# %% Import Required Modules and Paths to Modules
 from __future__ import print_function
 
 import os, sys
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import pickle 
 
 import tensorflow as tf
 import tensorflow.keras.callbacks as callbacks
@@ -17,25 +18,24 @@ cwd = os.getcwd() + "/"
 SCRIPTS = os.environ['SCRIPTS']
 DATA    = os.environ['windTurbineData']
 
-sys.path.append(SCRIPTS+'/10windTurbine')
 sys.path.append(SCRIPTS+'/pythonScripts')
 sys.path.append(SCRIPTS+'/10windTurbine'+'/TensorFlowLib')
 
 import myUQlib
 from ML_GetFuncs import getMeshData, getCaseData
-from ML_Models import UNet
+from ML_Model_UNet import UNet
 from ML_Utils import enableGPUMemGro, set_global_determinism
 from ML_Utils import dataGenerator, L1, L2
 
+# %% Set Env Vars and Global Settings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '2,3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 set_global_determinism()
 enableGPUMemGro()
 
 # %% Hyper-parameters
-mlMeshName, BATCH_SIZE = 'M128/', 2
-# mlMeshName, BATCH_SIZE = 'M64/', 2
+# mlMeshName, BATCH_SIZE = 'M128/', 2
+mlMeshName, BATCH_SIZE = 'M64/', 2
 
 # %% Case details
 caseName   = cwd.split('/')[-2]
@@ -60,19 +60,14 @@ if mlMeshName == 'M128/': nx, ny, nz = 549, 128, 128
 elif mlMeshName == 'M64/': nx, ny, nz = 275, 64, 64
 
 # %% Read OpenFOAM baseCase mesh access to grid and cell values
-case = samplesDir+'baseCase/'
-# case = samplesDir+'sample_0/'
-
-# case = '/projects/0/uqPint/10windTurbine/2RRSTF/ML/'+\
-#     '5_HornRevRow_refineLocal_realKE_65Dx10Dx4.3D_WdxD_060_WdyzD_15_'+\
-#     'varScl_eigUinTIPert_6WT'+\
-#     '/baseCase/'
+# case = samplesDir+'baseCase/'
+case = samplesDir+'sample_0/'
 
 vtkFile = case+'project2MLMesh_'+mlMeshName+'VTK/project2MLMesh_'+\
     mlMeshName[:-1]+'_0.vtk'
 
-for WT_num in range(1,2):
-# for WT_num in range(1,7):
+# for WT_num in range(1,2):
+for WT_num in range(1,7):
     print('WT_num:', WT_num)
     mesh, nCells, mlMeshShape, nCells_WT, cCenter_WT, \
         cCenterWT_idx, startPlane_WT_idx, endPlane_WT_idx, \
@@ -97,44 +92,56 @@ generator = dataGenerator(fileNames, mlMeshShape, batchSize=BATCH_SIZE)
 fileList = generator.fileList
 
 # %% Model
-isUNet = 0
+isUNet_Aij, isUNet_C_vec = 0, 1
 transposed = 1
 
-if isUNet:
+channels = 64
+l1_lambda = 1e-3
+dropFrac = 0.1
+
+if isUNet_Aij:
     if transposed:
         model = UNet(
-            mlMeshShape, dropFrac=0.1, l1_lambda=1e-3, convType='transposed'
+            mlMeshShape, dropFrac=dropFrac, channels=channels,
+            l1_lambda=l1_lambda, convType='transposed'
         )    
-        modelName = mlDir+'models/UNet_transposed_'+ mlMeshName[:-1]+'.h5'
+        modelName = mlDir+'models/UNet_transposed_Aij_'+ mlMeshName[:-1]+'.h5'
     else:
         model = UNet(
-            mlMeshShape, dropFrac=0.1, l1_lambda=1e-3, convType='upsampled'
+            mlMeshShape, dropFrac=dropFrac, channels=channels,
+            l1_lambda=l1_lambda, convType='upsampled'
         )    
-        modelName = mlDir+'models/UNet_upsampled_'+ mlMeshName[:-1]+'.h5'
+        modelName = mlDir+'models/UNet_upsampled_Aij_'+ mlMeshName[:-1]+'.h5'
 
     ioData = generator.UNetIOData
-    train_data, valid_data, test_data = generator.UNetIOBatchedSplitData    
-else:
-    model = UNet(
-        mlMeshShape, nRandFieldsChannels=4, dropFrac=0.1, 
-        l1_lambda=1e-3, convType='transposed'
-    )    
-    modelName = mlDir+'models/UNet_transposed_C_vec_'+ mlMeshName[:-1]+'.h5'
+    train_data, valid_data, test_data = generator.UNetIOBatchedSplitData
+elif isUNet_C_vec:
+    if transposed:
+        model = UNet(
+            mlMeshShape, nRandFieldsChannels=4, dropFrac=dropFrac, 
+            channels=channels, l1_lambda=l1_lambda, convType='transposed'
+        )    
+        modelName = mlDir+'models/UNet_transposed_C_vec_'+ mlMeshName[:-1]+'.h5'
+    else:
+        model = UNet(
+            mlMeshShape, nRandFieldsChannels=4, dropFrac=dropFrac, 
+            channels=channels, l1_lambda=l1_lambda, convType='upsampled'
+        )    
+        modelName = mlDir+'models/UNet_upsampled_C_vec_'+ mlMeshName[:-1]+'.h5'
+  
     ioData = generator.UNetIOData
     train_data, valid_data, test_data = generator.UNetIOBatchedSplitData 
     
 model.summary()
 
 # %% Model Parameters
-epochs = 1000
+epochs = 2000 # 1000
 s = len(train_data) * 20
 lr = 1e-3
 lrS = tf.keras.optimizers.schedules.ExponentialDecay(lr, s, 0.9)
 opt = tf.keras.optimizers.Adam(lrS, beta_1=0.9, beta_2=0.999)
-
 cbs = [callbacks.ModelCheckpoint(modelName, save_best_only=True),
        callbacks.EarlyStopping(patience=100, monitor='L1')]
-
 model.compile(optimizer=opt, loss='mae', metrics=[L1, L2])
 
 # %% Train the model
@@ -143,41 +150,47 @@ model.fit(train_data.shuffle(len(train_data)),
           callbacks=cbs, epochs=epochs
 )
 
-# %% Get latet lr and plot losses and errors
+# %% Get latest lr and plot losses and errors
 print('Latest lr =',opt._decayed_lr(tf.float32))
 
-fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(10,4), dpi=150)
+fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(15,4), dpi=150)
 
 try: df
 except NameError: df = pd.DataFrame(model.history.history)
  
 df[['loss', 'val_loss']].plot(ax=ax[0])
-df[['L1', 'L2', 'val_L1', 'val_L2']].plot(ax=ax[1])
+df[['L1', 'val_L1']].plot(ax=ax[1])
+df[['L2', 'val_L2']].plot(ax=ax[2])
 
 ax[0].set_ylabel('MAE Loss')
 ax[0].set_xlabel('Epoch')
 ax[1].set_ylabel('Relative Error')
 ax[1].set_xlabel('Epoch')
+ax[2].set_ylabel('Relative Error')
+ax[2].set_xlabel('Epoch')
 
-# ax[1].set_ylim(0,0.5)
-# ax[0].set_ylim(m0,1)
+# ax[0].set_ylim(0,2)
+# ax[1].set_ylim(0,0.25)
+# ax[2].set_ylim(0,1)
+
+pickle.dump(df, open(modelName[:-3]+'_history_df', 'wb'))
 
 # %% Check few cases in test_data
 load_model = 0 ###
 
 # From the Data Processing Step
-UHub_mean, UHub_std = (6.279, 1.967)
-TIHub_mean, TIHub_std = (12.969, 4.438)
-UMagMax, TIMax, tkeMax = (14.616, 21.795, 8.815)
+UHub_mean = pickle.load(open(mlDataDir+mlMeshName+'UHubMean.pkl', 'rb'))
+UHub_std = pickle.load(open(mlDataDir+mlMeshName+'UHubStd.pkl', 'rb'))
+TIHub_mean = pickle.load(open(mlDataDir+mlMeshName+'TIHubMean.pkl', 'rb'))
+TIHub_std = pickle.load(open(mlDataDir+mlMeshName+'TIHubStd.pkl', 'rb'))
+
 
 data = test_data
-# data = generator.UNetIOData.batch(1).cache().prefetch(1)
 
 # Load the model
 if load_model:
-    # dependencies = {'L1': L1, 'L2': L2}
-    dependencies = {'relErrL1': L1, 'relErrL2': L2}
-    loaded_model_name = mlDir+'models/UNet_DataGen_transposed_M64_first_best.h5'
+    dependencies = {'L1': L1, 'L2': L2}
+    loaded_model_name = modelName
     loaded_model = tf.keras.models.load_model(
         loaded_model_name, custom_objects=dependencies
     )
@@ -185,7 +198,7 @@ if load_model:
 else:
     y_pred = model.predict(data)
     
-# check_idx = np.random.randint(0, len(data), 5)
+# check_idx = np.random.randint(0, len(data), 20)
 check_idx = [49,  3,  1,  5, 53, 25, 88, 59, 40, 28]
 
 for s, test_case in enumerate(data):
@@ -200,12 +213,12 @@ for s, test_case in enumerate(data):
         UMagDiff = np.abs(UMagTestTrue-UMagTestPred).reshape(-1)
         TIDiff = np.abs(TITestTrue-TITestPred).reshape(-1)
         
-        if not isUNet:
-            UHubTest = test_case[0][0][0,0,0,2].numpy()
-            TIHubTest = test_case[0][0][0,0,0,3].numpy()
-        else:
+        if isUNet_Aij:
             UHubTest = test_case[0][0][0,0,0,6].numpy()
             TIHubTest = test_case[0][0][0,0,0,7].numpy()
+        elif isUNet_C_vec:
+            UHubTest = test_case[0][0][0,0,0,2].numpy()
+            TIHubTest = test_case[0][0][0,0,0,3].numpy()
 
         print(' UHub =',(UHubTest*UHub_std+UHub_mean).item()*100//10/10, \
               'TIHub =',(TIHubTest*TIHub_std+TIHub_mean).item()*100//10/10, 

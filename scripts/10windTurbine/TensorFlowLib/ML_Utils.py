@@ -8,9 +8,9 @@ import random
 def set_global_determinism(seed=42, fast_n_close=False):
     """
         Enable 100% reproducibility on operations related to 
-        tensor and randomness.
-        https://suneeta-mall.github.io/2019/12/22/Reproducible-ml-tensorflow.html
-
+        tensor and randomness. Reproducibility is gauteed only
+        when the entire script is ran again from start.
+        
         Parameters:
         seed (int): seed value for global randomness
         fast_n_close (bool): whether to achieve efficient at 
@@ -38,7 +38,7 @@ def enableGPUMemGro():
 # %% Helper Functions for Data Loader
 
 # Ususal tf dtype
-fdtype = tf.float32
+fdtype = tf.float64
 
 # Ones like mesh shape
 point_to_field = lambda x, shape: x * np.ones([*shape,1])
@@ -75,13 +75,32 @@ def L2(y_true , y_pred):
 
 # %% Data Loader
 
-# From the Data Processing Step
-UHub_mean, UHub_std = (6.279, 1.967)
-TIHub_mean, TIHub_std = (12.969, 4.438)
-UMagMax, TIMax, tkeMax = (14.616, 21.795, 8.815)
+# Defined in dataGenerator class
+UHub_mean, UHub_std = (None, None)
+TIHub_mean, TIHub_std = (None, None)
 
-# Hub Data (Field)
-def loadPickledSamplesAtInputFields(s, meshShape):
+# Hub Data (Point data at hub height)
+def loadUHubTIHubSamples(s):
+    UHub = tf.py_function(pklLoader, [s+'/UHub.pkl'], [fdtype])
+    UHub = tf.py_function(standardizer, [UHub, UHub_mean, UHub_std], [fdtype])    
+    TIHub = tf.py_function(pklLoader, [s+'/TIHub.pkl'], [fdtype])
+    TIHub = tf.py_function(standardizer, [TIHub, TIHub_mean, TIHub_std], [fdtype])
+    data = tf.py_function(concatenator, [UHub, TIHub], [fdtype])
+    data = tf.reshape(data, [2])
+    return data
+
+# Anisotropy Data (Aij or C_vec)
+def loadAnisoSamples(s, meshShape):
+    data = tf.py_function(pklLoader, [s+'/A.pkl'], [fdtype])
+    data = tf.reshape(data, [*meshShape,6])
+    
+    # data = tf.py_function(pklLoader, [s+'/C_vec.pkl'], [fdtype])
+    # data = tf.reshape(data, [*meshShape,2])
+    
+    return data
+
+# Concat [ Hub (Point Data -> Field) | Anisotropy Data (Aij or C_vec) ]
+def loadAllInputFieldSamples(s, meshShape):
     UHub = tf.py_function(pklLoader, [s+'/UHub.pkl'], [fdtype])
     UHub = tf.py_function(standardizer, [UHub, UHub_mean, UHub_std], [fdtype])
     UHub_field = tf.py_function(point_to_field, [UHub, meshShape], [fdtype])  
@@ -93,38 +112,22 @@ def loadPickledSamplesAtInputFields(s, meshShape):
     dataHub = tf.py_function(concatenator, [UHub_field, TIHub_field], [fdtype])
     dataHub = tf.reshape(dataHub, [*meshShape,2])
     
-    # AData = tf.py_function(pklLoader, [s+'/A.pkl'], [fdtype])
-    # AData = tf.reshape(AData, [*meshShape,6])
+    AData = tf.py_function(pklLoader, [s+'/A.pkl'], [fdtype])
+    AData = tf.reshape(AData, [*meshShape,6])
     
-    # conc_data = tf.py_function(concatenator, [AData, dataHub], [fdtype])
-    # conc_data = tf.reshape(conc_data, [*meshShape,8])
+    conc_data = tf.py_function(concatenator, [AData, dataHub], [fdtype])
+    conc_data = tf.reshape(conc_data, [*meshShape,8])
     
-    C_vec = tf.py_function(pklLoader, [s+'/C_vec.pkl'], [fdtype])
-    C_vec = tf.reshape(C_vec, [*meshShape,2])
+    # C_vec = tf.py_function(pklLoader, [s+'/C_vec.pkl'], [fdtype])
+    # C_vec = tf.reshape(C_vec, [*meshShape,2])
     
-    conc_data = tf.py_function(concatenator, [C_vec, dataHub], [fdtype])
-    conc_data = tf.reshape(conc_data, [*meshShape,4])
+    # conc_data = tf.py_function(concatenator, [C_vec, dataHub], [fdtype])
+    # conc_data = tf.reshape(conc_data, [*meshShape,4])
 
     return conc_data
 
-# Hub Data (Point)
-def loadPickledSamplesAtHub(s):
-    UHub = tf.py_function(pklLoader, [s+'/UHub.pkl'], [fdtype])
-    UHub = tf.py_function(standardizer, [UHub, UHub_mean, UHub_std], [fdtype])    
-    TIHub = tf.py_function(pklLoader, [s+'/TIHub.pkl'], [fdtype])
-    TIHub = tf.py_function(standardizer, [TIHub, TIHub_mean, TIHub_std], [fdtype])
-    data = tf.py_function(concatenator, [UHub, TIHub], [fdtype])
-    data = tf.reshape(data, [2])
-    return data
-
-# Anisotropy Data
-def loadPklSamplesAData(s, meshShape):
-    data = tf.py_function(pklLoader, [s+'/A.pkl'], [fdtype])
-    data = tf.reshape(data, [*meshShape,6])
-    return data
-
 # Output Data
-def loadPklSamplesOutputFields(s, meshShape):
+def loadAllOutputFieldSamples(s, meshShape):
     UMag = tf.py_function(pklLoader, [s+'/UMag.pkl'], [fdtype])
     TI = tf.py_function(pklLoader, [s+'/TI.pkl'], [fdtype])
     data = tf.py_function(concatenator, [UMag, TI], [fdtype])
@@ -133,13 +136,15 @@ def loadPklSamplesOutputFields(s, meshShape):
 
 # Load Data
 def loadData(fileList, meshShape):
-    hubData = fileList.map(lambda x: loadPickledSamplesAtHub(x)) 
     input_fields = fileList.map(
-        lambda x: loadPickledSamplesAtInputFields(x, meshShape)
+        lambda x: loadAllInputFieldSamples(x, meshShape)
     )
-    AData = fileList.map(lambda x: loadPklSamplesAData(x, meshShape))
-    output_fields = fileList.map(lambda x: loadPklSamplesOutputFields(x, meshShape))
-    return hubData, AData, input_fields, output_fields
+    output_fields = fileList.map(
+        lambda x: loadAllOutputFieldSamples(x, meshShape)
+    )
+    UHubTIHubData = fileList.map(lambda x: loadUHubTIHubSamples(x)) 
+    anisoData = fileList.map(lambda x: loadAnisoSamples(x, meshShape))
+    return UHubTIHubData, anisoData, input_fields, output_fields
 
 # Split and Batch Data
 def batchSplitData(data, trainFrac, batchSize):
@@ -162,23 +167,53 @@ def batchSplitData(data, trainFrac, batchSize):
 
 # Data Generator Class
 class dataGenerator():
-    def __init__(self, fileNames, meshShape, trainFrac=0.8, batchSize=2):
+    def __init__(self, mlDataDir, mlMeshName, fileNames, 
+                 meshShape, trainFrac=0.8, batchSize=2):
+        
+        # From the Data Processing Step
+        global UHub_mean, UHub_std, TIHub_mean, TIHub_std
+        statsDir = mlDataDir+mlMeshName
+        UHub_mean = pickle.load(open(statsDir+'UHubMean.pkl','rb'))
+        UHub_std = pickle.load(open(statsDir+'UHubStd.pkl','rb'))
+        TIHub_mean = pickle.load(open(statsDir+'TIHubMean.pkl','rb'))
+        TIHub_std = pickle.load(open(statsDir+'TIHubStd.pkl','rb'))
         
         # Attributes
-        self.batchSize = batchSize
-        self.meshShape = meshShape
-        self.trainFrac = trainFrac
+        self.batchSize, self.meshShape, self.trainFrac = \
+            batchSize, meshShape, trainFrac
+        self.UHub_mean, self.UHub_std, self.TIHub_mean, self.TIHub_std = \
+            UHub_mean, UHub_std, TIHub_mean, TIHub_std
         
-        # Load Files and Data
+        # Load Files and Data 
         self.fileList = tf.data.Dataset.from_tensor_slices(fileNames)
-        self.hubData, self.AData, self.input_fields, self.output_fields = \
-            loadData(self.fileList, self.meshShape)
+        self.UHubTIHubData, self.anisoData, \
+            self.input_fields, self.output_fields = \
+                loadData(self.fileList, self.meshShape)
         
-        # Data for UNet Model
+        # Data for UNet Model: zip(concat(anisoField,hubFields),outFields)
         self.UNetIOData = tf.data.Dataset.zip(
             (self.input_fields, self.output_fields)
         )
         self.UNetIOBatchedSplitData = batchSplitData(
             self.UNetIOData, self.trainFrac, self.batchSize
+        )
+        
+        # Data for AutoEnc Model: anisoData
+        self.AutoEncIOData = tf.data.Dataset.zip(
+            (self.anisoData, self.anisoData)
+        )
+        self.AutoEncIOBatchedSplitData = batchSplitData(
+            self.AutoEncIOData, self.trainFrac, self.batchSize
+        )
+        
+        # Data for TransposedCNN Model: zip(zip(anisoField,hubData),outFields)
+        self.TransposedCNNIOData = tf.data.Dataset.zip(
+            ( 
+                tf.data.Dataset.zip((self.anisoData, self.UHubTIHubData)),
+                self.output_fields
+            )
+        )
+        self.TransposedCNNIOBatchedSplitData = batchSplitData(
+            self.TransposedCNNIOData, self.trainFrac, self.batchSize
         )
         
