@@ -1,0 +1,6 @@
+/* Sources */
+
+derivedSources=sources/derived
+$(derivedSources)/actuationDiskSourceWithFieldNames/actuationDiskSourceWithFieldNames.C
+
+LIB = $(FOAM_USER_LIBBIN)/libfvOptionsCustom
