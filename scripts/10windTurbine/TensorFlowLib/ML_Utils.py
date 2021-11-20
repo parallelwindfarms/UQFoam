@@ -3,6 +3,7 @@ import numpy as np
 import pickle
 import tensorflow as tf
 import random
+import matplotlib.pyplot as plt
 
 # %% Global Seeding for Reproducibility
 def set_global_determinism(seed=42, fast_n_close=False):
@@ -34,6 +35,65 @@ def enableGPUMemGro():
     gpus = tf.config.experimental.list_physical_devices('GPU')
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
+        
+# %% Plotting True vs Pred vs |True-Pred|
+def makePlots(s, mlMeshShape, y0Plane_WT_idx, zhPlane_WT_idx, 
+              UMagTestTrue, UMagTestPred, UMagDiff,
+              TITestTrue, TITestPred, TIDiff):
+    plot_soln = lambda ax, soln, plane, norm=None: ax.imshow(
+        soln[plane].reshape(-1,mlMeshShape[2])[::-1], 
+        aspect='auto', 
+        norm=norm
+    )
+    err_pct = 0.05
+    normGlobal = plt.Normalize(0, 0.05)
+
+    # Contour Plots
+    fig, ax = plt.subplots(ncols=3, nrows=4, constrained_layout=True, 
+                           sharex=True, figsize=(16,6))
+    ax, CS = ax.flat, [0]*12
+    
+    norm = plt.Normalize(UMagTestTrue[y0Plane_WT_idx].min(), UMagTestTrue[y0Plane_WT_idx].max())
+    CS[0] = plot_soln(ax[0], UMagTestTrue, y0Plane_WT_idx)
+    CS[1] = plot_soln(ax[1], UMagTestPred, y0Plane_WT_idx, norm=norm)
+    norm = plt.Normalize(0, UMagTestTrue[y0Plane_WT_idx].max()*err_pct)
+    CS[2] = plot_soln(ax[2], UMagDiff, y0Plane_WT_idx, norm=normGlobal)
+    
+    CS[3] = plot_soln(ax[3], TITestTrue, y0Plane_WT_idx)
+    CS[4] = plot_soln(ax[4], TITestPred, y0Plane_WT_idx)
+    norm = plt.Normalize(0, TITestTrue[y0Plane_WT_idx].max()*err_pct)
+    CS[5] = plot_soln(ax[5], TIDiff, y0Plane_WT_idx, norm=normGlobal)
+    
+    norm = plt.Normalize(UMagTestTrue[zhPlane_WT_idx].min(), UMagTestTrue[zhPlane_WT_idx].max())
+    CS[6] = plot_soln(ax[6], UMagTestTrue, zhPlane_WT_idx)
+    CS[7] = plot_soln(ax[7], UMagTestPred, zhPlane_WT_idx, norm=norm)
+    norm = plt.Normalize(0, UMagTestTrue[zhPlane_WT_idx].max()*err_pct)
+    CS[8] = plot_soln(ax[8], UMagDiff, zhPlane_WT_idx, norm=normGlobal)
+    
+    CS[9] = plot_soln(ax[9], TITestTrue, zhPlane_WT_idx)
+    CS[10] = plot_soln(ax[10], TITestPred, zhPlane_WT_idx)
+    norm = plt.Normalize(0, TITestTrue[zhPlane_WT_idx].max()*err_pct)
+    CS[11] = plot_soln(ax[11], TIDiff, zhPlane_WT_idx, norm=normGlobal)
+        
+    for i in range(12):
+        # ax[i].set_xticks([])
+        ax[i].set_yticks([])
+        if i in [1,4,7,10]:
+            fig.colorbar(CS[i-1], ax=ax[i], aspect=50)
+        else:
+            fig.colorbar(CS[i], ax=ax[i], aspect=50)
+    
+    ax[0].set_title('OpenFOAM (True)')
+    ax[1].set_title('U-Net (Pred)')
+    ax[2].set_title('|True - Pred|')
+    ax[0].set_ylabel('UMag')
+    ax[3].set_ylabel('TI')
+    ax[6].set_ylabel('UMag')
+    ax[9].set_ylabel('TI')
+    
+    # ax[0].set_xlim(64*0,64*3)
+    
+    fig.suptitle(f'Case #{s}')
         
 # %% Helper Functions for Data Loader
 
@@ -76,15 +136,15 @@ def L2(y_true , y_pred):
 # %% Data Loader
 
 # Defined in dataGenerator class
-UHub_mean, UHub_std = (None, None)
-TIHub_mean, TIHub_std = (None, None)
+UHubMean, UHubStd = (None, None)
+TIHubMean, TIHubStd = (None, None)
 
 # Hub Data (Point data at hub height)
 def loadUHubTIHubSamples(s):
     UHub = tf.py_function(pklLoader, [s+'/UHub.pkl'], [fdtype])
-    UHub = tf.py_function(standardizer, [UHub, UHub_mean, UHub_std], [fdtype])    
+    UHub = tf.py_function(standardizer, [UHub, UHubMean, UHubStd], [fdtype])    
     TIHub = tf.py_function(pklLoader, [s+'/TIHub.pkl'], [fdtype])
-    TIHub = tf.py_function(standardizer, [TIHub, TIHub_mean, TIHub_std], [fdtype])
+    TIHub = tf.py_function(standardizer, [TIHub, TIHubMean, TIHubStd], [fdtype])
     data = tf.py_function(concatenator, [UHub, TIHub], [fdtype])
     data = tf.reshape(data, [2])
     return data
@@ -102,11 +162,11 @@ def loadAnisoSamples(s, meshShape):
 # Concat [ Hub (Point Data -> Field) | Anisotropy Data (Aij or C_vec) ]
 def loadAllInputFieldSamples(s, meshShape):
     UHub = tf.py_function(pklLoader, [s+'/UHub.pkl'], [fdtype])
-    UHub = tf.py_function(standardizer, [UHub, UHub_mean, UHub_std], [fdtype])
+    UHub = tf.py_function(standardizer, [UHub, UHubMean, UHubStd], [fdtype])
     UHub_field = tf.py_function(point_to_field, [UHub, meshShape], [fdtype])  
     
     TIHub = tf.py_function(pklLoader, [s+'/TIHub.pkl'], [fdtype])
-    TIHub = tf.py_function(standardizer, [TIHub, TIHub_mean, TIHub_std], [fdtype])
+    TIHub = tf.py_function(standardizer, [TIHub, TIHubMean, TIHubStd], [fdtype])
     TIHub_field = tf.py_function(point_to_field, [TIHub, meshShape], [fdtype])
     
     dataHub = tf.py_function(concatenator, [UHub_field, TIHub_field], [fdtype])
@@ -171,18 +231,18 @@ class dataGenerator():
                  meshShape, trainFrac=0.8, batchSize=2):
         
         # From the Data Processing Step
-        global UHub_mean, UHub_std, TIHub_mean, TIHub_std
+        global UHubMean, UHubStd, TIHubMean, TIHubStd
         statsDir = mlDataDir+mlMeshName
-        UHub_mean = pickle.load(open(statsDir+'UHubMean.pkl','rb'))
-        UHub_std = pickle.load(open(statsDir+'UHubStd.pkl','rb'))
-        TIHub_mean = pickle.load(open(statsDir+'TIHubMean.pkl','rb'))
-        TIHub_std = pickle.load(open(statsDir+'TIHubStd.pkl','rb'))
+        UHubMean = pickle.load(open(statsDir+'UHubMean.pkl','rb'))
+        UHubStd = pickle.load(open(statsDir+'UHubStd.pkl','rb'))
+        TIHubMean = pickle.load(open(statsDir+'TIHubMean.pkl','rb'))
+        TIHubStd = pickle.load(open(statsDir+'TIHubStd.pkl','rb'))
         
         # Attributes
         self.batchSize, self.meshShape, self.trainFrac = \
             batchSize, meshShape, trainFrac
-        self.UHub_mean, self.UHub_std, self.TIHub_mean, self.TIHub_std = \
-            UHub_mean, UHub_std, TIHub_mean, TIHub_std
+        self.UHubMean, self.UHubStd = UHubMean, UHubStd
+        self.TIHubMean, self.TIHubStd = TIHubMean, TIHubStd
         
         # Load Files and Data 
         self.fileList = tf.data.Dataset.from_tensor_slices(fileNames)

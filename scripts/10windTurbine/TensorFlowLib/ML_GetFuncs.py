@@ -14,7 +14,8 @@ def getMeshData(vtkFile, D, h, ADloc, ny, nz, d_D, x_up_D_WT):
     cCenter_WT = cCenter[cCenterWT_idx]
     nCells_WT = cCenter_WT.shape[0]
     nx_WT = int(nCells_WT/ny/nz)
-    assert nx_WT==nz==ny, f'nx_WT,nz,ny = {nx_WT,nz,ny}'
+    # assert nx_WT==nz==ny, f'nx_WT,nz,ny = {nx_WT,nz,ny}'
+    print(f'nx_WT,nz,ny = {nx_WT,nz,ny}')
     mlMeshShape = tuple([nz, ny, nx_WT])
     
     # Planes at xStart_WT and xEnd_WT
@@ -22,11 +23,12 @@ def getMeshData(vtkFile, D, h, ADloc, ny, nz, d_D, x_up_D_WT):
     endPlane_WT_idx = (cCenter_WT[:,0] == cCenter_WT[:,0].max())
     
     # Clipped planes for plotting
+    n = 2.0
     y0Plane_WT_idx = (cCenter_WT[:,1] > np.abs(cCenter_WT[:,1]).min()-1) * \
                      (cCenter_WT[:,1] < np.abs(cCenter_WT[:,1]).min()+1) * \
-                     (cCenter_WT[:,2] < (h+2.*D))   
+                     (cCenter_WT[:,2] < (h+n*D))   
     zhPlane_WT_idx = (cCenter_WT[:,2] > h) * (cCenter_WT[:,2] < (h+3)) * \
-                     (cCenter_WT[:,1] > -2.*D) * (cCenter_WT[:,1] < 2.*D)
+                     (cCenter_WT[:,1] > -n*D) * (cCenter_WT[:,1] < n*D)
         
     cellsInDiskAtHubHeight = np.array(np.where(
         (cCenter_WT[:,0] == cCenter_WT[:,0].min())  &
@@ -39,7 +41,7 @@ def getMeshData(vtkFile, D, h, ADloc, ny, nz, d_D, x_up_D_WT):
 
 # %% Basecase data
 def getCaseData(myUQlib, mesh, nCells_WT, cCenterWT_idx, 
-                    cellsInDiskAtHubHeight, Uref):
+                    cellsInDiskAtHubHeight):
     UMag = np.linalg.norm(mesh.cell_data['U'][cCenterWT_idx], axis=1)
     UHub = UMag[cellsInDiskAtHubHeight].mean()
     defU = (UHub-UMag)/UHub
