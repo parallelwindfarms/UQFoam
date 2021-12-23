@@ -32,7 +32,7 @@ def getMeshData(vtkFile, D, h, ADloc, ny, nz, d_D, x_up_D_WT):
         
     cellsInDiskAtHubHeight = np.array(np.where(
         (cCenter_WT[:,0] == cCenter_WT[:,0].min())  &
-        (np.linalg.norm(cCenter_WT[:,1:] - ADloc[1:], axis=1) <= D/2.0)
+        (np.linalg.norm(cCenter_WT[:,1:] - ADloc[1:], axis=1) <= D/10.0)
     ))[0]
     
     return mesh, nCells, mlMeshShape, nCells_WT, cCenter_WT, \

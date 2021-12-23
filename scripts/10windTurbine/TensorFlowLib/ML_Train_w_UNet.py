@@ -29,13 +29,13 @@ from ML_Utils import dataGenerator, L1, L2, makePlots
 
 # %% Set Env Vars and Global Settings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 set_global_determinism()
 enableGPUMemGro()
 
 # %% Hyper-parameters
 # mlMeshName, BATCH_SIZE = 'M128/', 2
-mlMeshName, BATCH_SIZE = 'M64/', 5 # 10
+mlMeshName, BATCH_SIZE = 'M64/', 10
 
 # %% Case details
 caseName   = cwd.split('/')[-2]
@@ -52,7 +52,7 @@ mlDataDir = mlDir+'data/'
 # %% Case Parameters
 D, h = 80.0, 70.0
 # Influence until next 3 WTs
-d_D, x_up_D_WT = 7.0*3, 1.0
+d_D, x_up_D_WT = 7*3, 0.01 #1.0
 ADloc = lambda WT_num: (0 + (WT_num-1) * 7.0*D, 0, h)
 
 # Projection mesh params
@@ -60,13 +60,13 @@ if mlMeshName == 'M128/': ny, nz = 128, 128
 elif mlMeshName == 'M64/': ny, nz = 64, 64
 
 # %% Read OpenFOAM baseCase mesh access to grid and cell values
-case = samplesDir+'baseCase/'
-# case = samplesDir+'sample_0/'
+# case = samplesDir+'baseCase/'
+case = samplesDir+'sample_0/'
 
 # case = '/projects/0/uqPint/10windTurbine/2RRSTF/ML/'+\
 #     '5_HornRevRow_refineLocal_realKE_65Dx10Dx4.3D_WdxD_060_WdyzD_15_'+\
-#     'varScl_eigUinTIPert_6WT'+\
-#     '/DET_samples/baseCase/'
+#     'varScl_eigUinTIPert_6WT/DET_samples'+\
+#     '/baseCase/'
 
 vtkFile = case+'project2MLMesh_'+mlMeshName+'VTK/project2MLMesh_'+\
     mlMeshName[:-1]+'_0.vtk'
@@ -84,7 +84,7 @@ for WT_num in [1]:
             myUQlib, mesh, nCells_WT, cCenterWT_idx, 
             cellsInDiskAtHubHeight
     )
-        
+    
     print('UHubDet TIHubDet:', UHubDet, TIHubDet, '\n')
 
 # %% Data generator
@@ -95,46 +95,18 @@ generator = dataGenerator(
 fileList = generator.fileList
 
 # %% Model
-isUNet_Aij, isUNet_C_vec = 1, 0
-transposed = 1
+transposed, channels, l1_lambda, dropFrac = 1, 64, 1e-3, 0.1
+convType = 'transposed' if transposed else 'upsampled'
 
-channels = 64
-l1_lambda = 1e-3
-dropFrac = 0.1
+model = UNet(
+    mlMeshShape, dropFrac=dropFrac, channels=channels,
+    l1_lambda=l1_lambda, convType=convType
+) 
+modelName = mlDir+'models/UNet_'+convType+'_Aij_d_D_'+str(d_D)+'_x_up_D_WT_'+str(x_up_D_WT)+\
+    '_batch_'+str(BATCH_SIZE)+'_'+mlMeshName[:-1]+'.h5'
 
-if isUNet_Aij:
-    if transposed:
-        model = UNet(
-            mlMeshShape, dropFrac=dropFrac, channels=channels,
-            l1_lambda=l1_lambda, convType='transposed'
-        )    
-        # modelName = mlDir+'models/UNet_transposed_Aij_'+ mlMeshName[:-1]+'.h5'
-        modelName = mlDir+'models/UNet_transposed_Aij_batch10_'+ mlMeshName[:-1]+'.h5'
-    else:
-        model = UNet(
-            mlMeshShape, dropFrac=dropFrac, channels=channels,
-            l1_lambda=l1_lambda, convType='upsampled'
-        )    
-        modelName = mlDir+'models/UNet_upsampled_Aij_'+ mlMeshName[:-1]+'.h5'
-
-    ioData = generator.UNetIOData
-    train_data, valid_data, test_data = generator.UNetIOBatchedSplitData
-elif isUNet_C_vec:
-    if transposed:
-        model = UNet(
-            mlMeshShape, nRandFieldsChannels=4, dropFrac=dropFrac, 
-            channels=channels, l1_lambda=l1_lambda, convType='transposed'
-        )    
-        modelName = mlDir+'models/UNet_transposed_C_vec_'+ mlMeshName[:-1]+'.h5'
-    else:
-        model = UNet(
-            mlMeshShape, nRandFieldsChannels=4, dropFrac=dropFrac, 
-            channels=channels, l1_lambda=l1_lambda, convType='upsampled'
-        )    
-        modelName = mlDir+'models/UNet_upsampled_C_vec_'+ mlMeshName[:-1]+'.h5'
-  
-    ioData = generator.UNetIOData
-    train_data, valid_data, test_data = generator.UNetIOBatchedSplitData 
+ioData = generator.UNetIOData
+train_data, valid_data, test_data = generator.UNetIOBatchedSplitData
     
 model.summary()
 
@@ -199,8 +171,8 @@ if load_model:
 else:
     y_pred = model.predict(data)
     
-# check_idx = np.random.randint(0, len(data), 10)
-check_idx = [49,  3,  1,  5, 53, 25, 88, 59, 40, 28]
+check_idx = np.random.randint(0, len(data), 50)
+# check_idx = [49,  3,  1,  5, 53, 25, 88, 59, 40, 28]
 
 for s, test_case in enumerate(data):
     if s in check_idx:
@@ -214,12 +186,8 @@ for s, test_case in enumerate(data):
         UMagDiff = np.abs(UMagTestTrue-UMagTestPred).reshape(-1)
         TIDiff = np.abs(TITestTrue-TITestPred).reshape(-1)
         
-        if isUNet_Aij:
-            UHubTest = test_case[0][0][0,0,0,6].numpy()
-            TIHubTest = test_case[0][0][0,0,0,7].numpy()
-        elif isUNet_C_vec:
-            UHubTest = test_case[0][0][0,0,0,2].numpy()
-            TIHubTest = test_case[0][0][0,0,0,3].numpy()
+        UHubTest = test_case[0][0][0,0,0,6].numpy()
+        TIHubTest = test_case[0][0][0,0,0,7].numpy()
 
         print(' UHub =',(UHubTest*UHubStd+UHubMean).item()*100//10/10, \
               'TIHub =',(TIHubTest*TIHubStd+TIHubMean).item()*100//10/10, 

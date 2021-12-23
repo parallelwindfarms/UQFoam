@@ -47,8 +47,7 @@ mlDir = '../4_Vestas2MWV_refineLocal_realKE_30Dx10Dx4.3D_'+\
 mlDataDir = mlDir+'data/'
 
 # %% Model
-modelName = mlDir+'models/UNet_transposed_Aij_batch10_'+ mlMeshName[:-1]+'.h5'
-# modelName = mlDir+'models_bkp/UNet_transposed_Aij_'+ mlMeshName[:-1]+'.h5'
+modelName = mlDir+'models/UNet_transposed_Aij_d_D_21_x_up_D_WT_0.01_batch_10_M64.h5'
 dependencies = {'L1': L1, 'L2': L2}
 model = tf.keras.models.load_model(modelName, custom_objects=dependencies)
 model.trainable = False
@@ -57,9 +56,7 @@ model.summary()
 # %% Case Parameters
 D, h = 80.0, 70.0
 # Influence until next 3 WTs
-WT_infl = 3
-# WT_infl = 1
-d_D, x_up_D_WT = 7.0*WT_infl, 1.0
+d_D, x_up_D_WT = 7*3, 0.01 #1.0
 ADloc = lambda WT_num: (0 + (WT_num-1) * 7.0*D, 0, h)
 
 # Projection mesh params
@@ -130,12 +127,12 @@ for WT_num in range(1,7):
         
     if WT_num==1:
         Uin, TIin = UHubDet, TIHubDet
-    else:
-        UHubDet = UMagPred[:,:,mlMeshShape[0]*(WT_num-2):mlMeshShape[0]*(WT_num-2)+mlMeshShape[2]]\
-            [:,:,::-1].reshape(-1)[cellsInDiskAtHubHeight].mean() + 0.1
-        TIHubDet = TIPred[:,:,mlMeshShape[0]*(WT_num-2):mlMeshShape[0]*(WT_num-2)+mlMeshShape[2]]\
-            [:,:,::-1].reshape(-1)[cellsInDiskAtHubHeight].mean()
-        print(f'Updated:  {UHubDet = }, {TIHubDet = }')
+    # else:
+    #     UHubDet = UMagPred[:,:,mlMeshShape[0]*(WT_num-2):mlMeshShape[0]*(WT_num-2)+mlMeshShape[2]]\
+    #         [:,:,::-1].reshape(-1)[cellsInDiskAtHubHeight].mean() + 0.1
+    #     TIHubDet = TIPred[:,:,mlMeshShape[0]*(WT_num-2):mlMeshShape[0]*(WT_num-2)+mlMeshShape[2]]\
+    #         [:,:,::-1].reshape(-1)[cellsInDiskAtHubHeight].mean()
+    #     print(f'Updated:  {UHubDet = }, {TIHubDet = }')
 
     UHubStand = (UHubDet-UHubMean)/UHubStd
     TIHubStand = (TIHubDet-TIHubMean)/TIHubStd
@@ -168,7 +165,7 @@ for WT_num in range(1,7):
     defUTestPred = 1 - UMagTestPred/UHubDet
     defUTestDiff = np.abs(defUTestTrue-defUTestPred).reshape(-1)
  
-    startIdx = int(mlMeshShape[2]*(WT_num-1)/WT_infl)
+    startIdx = int(mlMeshShape[2]*(WT_num-1)/3)
     endIdx = startIdx + mlMeshShape[2]
     
     if WT_num in [1,4]: 
@@ -176,7 +173,7 @@ for WT_num in range(1,7):
         TITrue[:,:,startIdx:endIdx] = TITestTrue.reshape(mlMeshShape)
         defUTrue[:,:,startIdx:endIdx] = defUTestTrue.reshape(mlMeshShape)
     
-    offset = 10 if WT_num>1 else 0
+    offset = 0 if WT_num>1 else 0
     defUPred[:,:,startIdx+offset:endIdx] = \
         defUTestPred.reshape(mlMeshShape)[:,:,offset:]
     # defUPred[:,:,startIdx+offset:endIdx] += \

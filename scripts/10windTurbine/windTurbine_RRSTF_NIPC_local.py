@@ -6,7 +6,7 @@ Created on Fri Jan 29 15:21:21 2021
 @author: jigar
 """
 
-# <codecell> Import Required Modules and env vars
+# %% Import Required Modules and env vars
 from __future__ import print_function
 
 import os, sys
@@ -14,12 +14,11 @@ import numpy as np
 import chaospy as cp
 import pyvista as pv
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from multiprocessing import Pool
 from functools import partial
 from timeit import default_timer as timer
-
-from tqdm import tqdm
 
 SCRIPTS = os.environ['SCRIPTS']
 DATA    = os.environ['windTurbineData']
@@ -31,15 +30,16 @@ cwd = os.getcwd() + "/"
 
 import myUQlib
 
-# <codecell> Case details
+# %% Case details
 caseName   = cwd.split('/')[-2]
+# casePngDir = '/2RRSTF/NIPC/uqPaperCases/' + caseName+'/png'
 casePngDir = '/2RRSTF/NIPC/' + caseName+'/png'
 
 if (os.path.exists(DATA+casePngDir))==False:
     print('Making new case data directory...')
     os.makedirs(DATA+casePngDir, exist_ok=True)
 
-# <codecell> Parametrs
+# %% Parametrs
 D = 80
 h = 70
 Uref = 8
@@ -51,7 +51,7 @@ ADloc = (0,0,h)
 nx = 150
 Wdx = D/20
 
-# <codecell> Setting the PCE parameters
+# %% Setting the PCE parameters
 nSamplesOrg = 30
 
 # delB = cp.Uniform(0,1) # w/ Uniform Sampling
@@ -70,11 +70,11 @@ Pplus1 = len(phi)
 nSamples = range(nSamplesOrg*3)
 
 
-# <codecell>  ###############################################################################################
+# %%  ###############################################################################################
 # Plot over centerline
 #############################################################################################################
 
-# <codecell> Read OpenFOAM case mesh access to grid and cell values
+# %% Read OpenFOAM case mesh access to grid and cell values
 vtkFile   = 'baseCase/VTK/baseCase_1000.vtk'
 # s = 80
 # vtkFile = 'sample_'+str(s)+'/VTK/'+'sample_'+str(s)+'_1000.vtk'
@@ -91,11 +91,15 @@ x_D = cCenter[0:nx,0]/D
 
 nCellsInDisk = int(cIdxInDisk.shape[0]/nx)
 
-UDetMag = np.linalg.norm(mesh.cell_arrays['U'][cIdxInDisk], axis=1)
-tkeDet  = mesh.cell_arrays['k'][cIdxInDisk]
+UDetMag = np.linalg.norm(mesh.cell_data['U'][cIdxInDisk], axis=1)
+tkeDet  = mesh.cell_data['k'][cIdxInDisk]
 TIDet   = np.sqrt(tkeDet*2/3)/Uref *100
 
-# <codecell> Importing LES, RANS, UQRANS data
+defUDet     = (Uref-UDetMag)/Uref
+defUDetAvgd = np.average(np.reshape(defUDet, (nCellsInDisk, nx)), axis=0)
+TIDetAvgd   = np.average(np.reshape(TIDet-TIDet[0], (nCellsInDisk, nx)), axis=0)
+
+# %% Importing LES, RANS, UQRANS data
 U_LES  = np.loadtxt(DATA+"/0LES/Vestas2MWV80/LES_defU_centerline.csv")
 TI_LES = np.loadtxt(DATA+"/0LES/Vestas2MWV80/LES_TI_centerline.csv")
 
@@ -103,11 +107,11 @@ def getSamplesOverDiskVol(cIdxInDisk, s):
     print(s)
     vtkFile = 'sample_'+str(s)+'/VTK/'+'sample_'+str(s)+'_1000.vtk'
     mesh    = pv.UnstructuredGrid(cwd + vtkFile)
-    UMag    = np.linalg.norm(mesh.cell_arrays['U'][cIdxInDisk], axis=1)
-    tke     = mesh.cell_arrays['k'][cIdxInDisk]
+    UMag    = np.linalg.norm(mesh.cell_data['U'][cIdxInDisk], axis=1)
+    tke     = mesh.cell_data['k'][cIdxInDisk]
     return UMag, tke
 
-pool = Pool(processes=8)
+pool = Pool(processes=32)
 start = timer()
 data = pool.map(partial(getSamplesOverDiskVol, cIdxInDisk), (nSamples))
 USamplesMag = np.array([data[s][0] for s in range(len(nSamples))])
@@ -116,44 +120,47 @@ pool.close()
 pool.join()
 print(timer()-start, 's')
 
-# <codecell> PCE of U
-defUSamples = (Uref-USamplesMag)/Uref
+try:
+    UrefSamples = np.array([float(pd.read_csv('Samples_Uref/Uref'+str(i)).\
+                  columns[0].strip(';').split()[1]) for i in range(len(nSamples))])
+    UrefSamples = UrefSamples.reshape(-1,1)
+except FileNotFoundError:
+    UrefSamples = Uref
+    
+# %% PCE of U
+defUSamples = (UrefSamples-USamplesMag)/UrefSamples
 defU_PCEApp = cp.fit_regression(phi, delBSamples, defUSamples)
 defU_PCEModes = (defU_PCEApp.coefficients).T
 
 defU0PCEAvgd     = np.average(np.reshape(defU_PCEModes[0], (nCellsInDisk, nx)), axis=0)
 defUSigmaPCEAvgd = np.average(np.reshape(np.sqrt(np.sum(defU_PCEModes[1:]**2, axis=0)), (nCellsInDisk, nx)), axis=0)
 
-## <codecell> PCE of TI
-TISamples = np.sqrt(tkeSamples*2/3)/Uref *100
+## %% PCE of TI
+TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
+TISamples = TISamples - TISamples[:,0].reshape(-1,1)
 TI_PCEApp = cp.fit_regression(phi, delBSamples, TISamples)
 TI_PCEModes = (TI_PCEApp.coefficients).T
 
 TI0PCEAvgd     = np.average(np.reshape(TI_PCEModes[0], (nCellsInDisk, nx)), axis=0)
 TISigmaPCEAvgd = np.average(np.reshape(np.sqrt(np.sum(TI_PCEModes[1:]**2, axis=0)), (nCellsInDisk, nx)), axis=0)
 
-# <codecell> Computing averaged U fields
-USamplesMagMean  = np.mean(USamplesMag, axis=0)
-USamplesMagSigma = np.std(USamplesMag, axis=0)
-
-defUDet  = (Uref-UDetMag)/Uref
-defUMean = (Uref-USamplesMagMean)/Uref
-
-defUDetAvgd   = np.average(np.reshape(defUDet, (nCellsInDisk, nx)), axis=0)
+# %% Computing averaged U fields
+defUMean  = np.mean((UrefSamples-USamplesMag)/UrefSamples, axis=0)
+defUSigma = np.std((UrefSamples-USamplesMag)/UrefSamples, axis=0)
 defUMeanAvgd  = np.average(np.reshape(defUMean, (nCellsInDisk, nx)), axis=0)
-USigmaMagAvgd = np.average(np.reshape(USamplesMagSigma, (nCellsInDisk, nx)), axis=0)
+defUSigmaAvgd = np.average(np.reshape(defUSigma, (nCellsInDisk, nx)), axis=0)
 
-# <codecell> Computing averaged TI fields
-TISamples = np.sqrt(tkeSamples*2/3)/Uref *100
+## %% Computing averaged TI fields
+TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
+TISamples = TISamples - TISamples[:,0].reshape(-1,1)
 TIMean    = np.mean(TISamples, axis=0)
 TISigma   = np.std(TISamples, axis=0)
 
-TIDetAvgd   = np.average(np.reshape(TIDet, (nCellsInDisk, nx)), axis=0)
 TIMeanAvgd  = np.average(np.reshape(TIMean, (nCellsInDisk, nx)), axis=0)
 TISigmaAvgd = np.average(np.reshape(TISigma, (nCellsInDisk, nx)), axis=0)
 
-# <codecell> Figures settings
-myUQlib.rcParamsSettings(15)
+# %% Figures settings
+# myUQlib.rcParamsSettings(15)
 
 DETClr  = (0.6350, 0.0780, 0.1840)
 meanClr = 'b'
@@ -166,11 +173,11 @@ diskSpan = (ADloc[0]/D-Wdx/D/2, ADloc[0]/D+Wdx/D/2)
 # Plotting averaged fields
 
 MC = False
-# MC = True
+MC = True
 
 
 if MC: N=2
-else: N=1
+else: N=2
 
 fig, ax = plt.subplots(ncols=1, nrows=2, constrained_layout=True, sharex=True, figsize=(10,6))
 
@@ -180,8 +187,8 @@ ax[axIdx].plot(x_D, defUDetAvgd, color=DETClr)
 
 if MC==True:
     ax[axIdx].plot(x_D, defUMeanAvgd, color=meanClr)
-    ax[axIdx].fill_between(x_D, defUMeanAvgd + N*USigmaMagAvgd/Uref, \
-                                defUMeanAvgd - N*USigmaMagAvgd/Uref, \
+    ax[axIdx].fill_between(x_D, defUMeanAvgd + N*defUSigmaAvgd, \
+                                defUMeanAvgd - N*defUSigmaAvgd, \
                                 alpha=0.2, linewidth=0, color='b')
 else:
     ax[axIdx].plot(x_D, defU0PCEAvgd, color=meanClr)
@@ -190,16 +197,17 @@ else:
                                 alpha=0.2, linewidth=0, color='b')
 
 ax[axIdx].axvspan(*diskSpan, linewidth=0, color=diskClr)
-ax[axIdx].set_ylim(bottom=-0.1,top=0.7)
+ax[axIdx].set_ylim(bottom=0.0,top=0.6)
 ax[axIdx].set_yticks([0.0, 0.2, 0.4, 0.6])
-ax[axIdx].set_xlim(left=-4,right=25)
+# ax[axIdx].set_xlim(left=-4,right=25)
 # ax[axIdx].set_xlabel('$x/D$')
 ax[axIdx].set_ylabel('$\Delta u / u_h$')
 ax[axIdx].spines['right'].set_visible(False)
 ax[axIdx].spines['top'].set_visible(False)
 
 axIdx = 1
-ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1], color=LESClr, marker="o", mfc='none', lw=0, ms=3)
+ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1]-TI_LES[:-1,1].min(), 
+               color=LESClr, marker="o", mfc='none', lw=0, ms=3)
 ax[axIdx].plot(x_D, TIDetAvgd, color=DETClr)
 
 if MC==True:
@@ -214,18 +222,22 @@ else:
                                 alpha=0.2, linewidth=0, color='b')
 
 ax[axIdx].axvspan(*diskSpan, linewidth=0, color=diskClr)
-ax[axIdx].set_ylim(bottom=2.5,top=17.5)
-ax[axIdx].set_yticks([5, 10, 15])
+ax[axIdx].set_ylim(bottom=0,top=12)
+ax[axIdx].set_yticks([0, 4, 8, 12])
 ax[axIdx].set_xlim(left=-4,right=25)
 ax[axIdx].set_xticks([-4, 0, 5, 10, 15, 20, 25])
 ax[axIdx].set_xlabel('$x/D$')
-ax[axIdx].set_ylabel('$I \\%$')
+ax[axIdx].set_ylabel('$I_{add} [\\%]$')
 ax[axIdx].spines['right'].set_visible(False)
 ax[axIdx].spines['top'].set_visible(False)
 
-ax[0].legend(['LES', 'DET', r'$\textbf{E}[\bullet]$', '_nolegend_',
-              r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
-              ncol=2, frameon=False)
+# ax[0].legend(['LES', 'DET', r'$\textbf{E}[\bullet]$', '_nolegend_',
+#               r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
+#               ncol=2, frameon=False)
+ax[0].legend(['LES', 'DET', r'${E}[\bullet]$', '_nolegend_',
+              r'${E}[\bullet] \, \pm \, 2\sqrt{{V}[\bullet]}$'],
+              ncol=4, frameon=False, columnspacing=0.75,
+              loc='upper center', bbox_to_anchor=(0.5, 1.15))
 
 if MC==True:
     fig.savefig(DATA+casePngDir+'/diskAvgdFields_MC.png', dpi=300)
@@ -237,11 +249,11 @@ else:
 
 
 
-# <codecell>  ###############################################################################################
+# %%  ###############################################################################################
 # Plot over lines at different x locations
 #############################################################################################################
 
-# <codecell> Importing LES, RANS, UQRANS data
+# %% Importing LES, RANS, UQRANS data
 lines = (2,4,7,12)
 numLines = len(lines)
 yPts = 100
@@ -293,7 +305,7 @@ pool.close()
 pool.join()
 print(timer()-start, 's')
 
-# <codecell> PCE of U
+# %% PCE of U
 defUSamples   = (Uref-USamplesMag)/Uref
 
 defU_PCEModes = np.zeros((Pplus1, yPts, numLines))
@@ -304,7 +316,7 @@ for l in range(numLines):
 defU0PCE     = defU_PCEModes[0]
 defUSigmaPCE = np.sqrt(np.sum(defU_PCEModes[1:]**2, axis=0))
 
-## <codecell> PCE of TI
+## %% PCE of TI
 TISamples   = np.sqrt(tkeSamples*2/3)/Uref *100
 
 TI_PCEModes = np.zeros((Pplus1, yPts, numLines))
@@ -316,7 +328,7 @@ TI_PCEModes = np.array(TI_PCEModes)
 TI0PCE     = TI_PCEModes[0]
 TISigmaPCE = np.sqrt(np.sum(TI_PCEModes[1:]**2, axis=0))
 
-# <codecell> Computing averaged U fields
+# %% Computing averaged U fields
 USamplesMagMean  = np.mean(USamplesMag, axis=0)
 USamplesMagSigma = np.std(USamplesMag, axis=0)
 
@@ -324,13 +336,13 @@ defUDet   = (Uref-UDetMag)/Uref
 defUMean  = (Uref-USamplesMagMean)/Uref
 defUSigma = USamplesMagSigma/Uref
 
-# <codecell> Computing averaged TI fields
+# %% Computing averaged TI fields
 TIDet     = np.sqrt(tkeDet*2/3)/Uref *100
 TISamples = np.sqrt(tkeSamples*2/3)/Uref *100
 TIMean  = np.mean(TISamples, axis=0)
 TISigma = np.std(TISamples, axis=0)
 
-# <codecell> Figures settings
+# %% Figures settings
 myUQlib.rcParamsSettings(15)
 
 DETClr  = (0.6350, 0.0780, 0.1840)

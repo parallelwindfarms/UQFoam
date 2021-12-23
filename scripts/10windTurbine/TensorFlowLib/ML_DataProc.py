@@ -43,19 +43,19 @@ mlDataDir = mlDir+'data/'
 # %% Case Parameters
 D, h, Uref = 80, 70, 8
 # Influence until next 3 WTs
-Wdx, d_D = D/60., 7.*3.
-x_up_D_WT = 1.0
+d_D, x_up_D_WT = 7*3, 0.01 #1.0
 ADloc = lambda WT_num: (0 + (WT_num-1) *d_D*D, 0, h)
 
 # Projection mesh params
-if mlMeshName == 'M128/': nx, ny, nz = 549, 128, 128
-elif mlMeshName == 'M64/': nx, ny, nz = 275, 64, 64
+if mlMeshName == 'M128/': ny, nz = 128, 128
+elif mlMeshName == 'M64/': ny, nz = 64, 64
 
 # %% Read OpenFOAM baseCase mesh access to grid and cell values
 case = samplesDir+'baseCase/'
 # case = samplesDir+'sample_0/'
 
-vtkFile = case+'project2MLMesh_'+mlMeshName+'VTK/project2MLMesh_'+mlMeshName[:-1]+'_0.vtk'
+vtkFile = case+'project2MLMesh_'+mlMeshName+'VTK/project2MLMesh_'+\
+    mlMeshName[:-1]+'_0.vtk'
 
 mesh, nCells, mlMeshShape, nCells_WT, cCenter_WT, \
     cCenterWT_idx, startPlane_WT_idx, endPlane_WT_idx, \

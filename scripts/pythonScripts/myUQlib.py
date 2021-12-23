@@ -173,7 +173,7 @@ FoamFile\n\
     print ("Done.\n")
 
 # %% Convert symmTensor to Tensor
-def symmTensorToTensorv2021(symmTensor, nCells):
+def symmTensorToTensorv2012(symmTensor, nCells):
     tensor = np.zeros((nCells, 3, 3))
 
     tensor[:,0,0],tensor[:,0,1],tensor[:,0,2],\

@@ -27,6 +27,7 @@ import myUQlib
 
 # <codecell> Case details
 caseName   = cwd.split('/')[-2]
+# casePngDir = '/2RRSTF/NIPC/uqPaperCases/' + caseName+'/png'
 casePngDir = '/2RRSTF/NIPC/' + caseName+'/png'
 
 if (os.path.exists(DATA+casePngDir))==False:
@@ -65,29 +66,48 @@ cCenterInPlanes = cCenter[cIdxInPlanes]
 nCells = len(cIdxInPlanes[0])
 y, z = cCenterInPlanes[0,:,1]/D, cCenterInPlanes[0,:,2]/D
 
-RDet = mesh.cell_arrays['turbulenceProperties:R'][cIdxInPlanes]
+RDet = mesh.cell_data['turbulenceProperties:R'][cIdxInPlanes]
 RDet = np.array([myUQlib.symmTensorToTensorv2012(RDet[l], nCells) for l in range(numLines)])
-tkeDet = mesh.cell_arrays['k'][cIdxInPlanes]
+tkeDet = mesh.cell_data['k'][cIdxInPlanes]
 a_ij_Det = np.array([myUQlib.anisotropyTensor(RDet[l], tkeDet[l], nCells) for l in range(numLines)])
 
 # Random sample
 s = 25
 vtkFile = 'sample_'+str(s)+'/VTK/'+'sample_'+str(s)+'_1000.vtk'
 mesh = pv.UnstructuredGrid(cwd + vtkFile)
-RSample = mesh.cell_arrays['turbulenceProperties:R'][cIdxInPlanes]
+RSample = mesh.cell_data['turbulenceProperties:R'][cIdxInPlanes]
 RSample = np.array([myUQlib.symmTensorToTensorv2012(RSample[l], nCells) for l in range(numLines)])
-tkeSample = mesh.cell_arrays['k'][cIdxInPlanes]
+tkeSample = mesh.cell_data['k'][cIdxInPlanes]
 a_ij_Sample = np.array([myUQlib.anisotropyTensor(RSample[l], tkeSample[l], nCells) for l in range(numLines)])
 
-# LES
-s = 85
-vtkFile = 'sample_'+str(s)+'/VTK/'+'sample_'+str(s)+'_1000.vtk'
+# %% LES
+vtkFile = 'baseCase_LES/transient/VTK/transient_80000.vtk'
 mesh = pv.UnstructuredGrid(cwd + vtkFile)
-RLES = mesh.cell_arrays['turbulenceProperties:R'][cIdxInPlanes]
-RLES = np.array([myUQlib.symmTensorToTensorv2012(RLES[l], nCells) for l in range(numLines)])
-tkeLES = mesh.cell_arrays['k'][cIdxInPlanes]
-a_ij_LES = np.array([myUQlib.anisotropyTensor(RLES[l], tkeLES[l], nCells) for l in range(numLines)])
+nCells_LES  = mesh.n_cells
+cCenter = np.array(mesh.cell_centers().points)
 
+cIdxInDuct = np.where((abs(cCenter[:,1]-ADloc[1]) <= D*1.30) & (cCenter[:,2] <= D*2.6))[0]
+cCenterInDuct = cCenter[cIdxInDuct]
+
+lines = (2,4,7,12)
+numLines = len(lines)
+cIdxInPlanes = []
+for l in lines:
+    tmpIdxInPlane = np.where((cCenter[:,0] >= l*D) & (cCenter[:,0] <= l*D+Wdx*2))[0]
+    cIdxInPlanes.append(np.intersect1d(cIdxInDuct, np.array(tmpIdxInPlane)))
+cIdxInPlanes = np.array(cIdxInPlanes)
+cCenterInPlanes = cCenter[cIdxInPlanes]
+nCells_LES = len(cIdxInPlanes[0])
+y_LES, z_LES = cCenterInPlanes[0,:,1]/D, cCenterInPlanes[0,:,2]/D
+
+RLES = mesh.cell_data['UPrime2Mean'][cIdxInPlanes]
+# RLES = mesh.cell_data['turbulenceProperties:R'][cIdxInPlanes]
+RLES = np.array([myUQlib.symmTensorToTensorv2012(RLES[l], nCells_LES) for l in range(numLines)])
+tkeLES = np.zeros_like(RLES[:,:,0,0])
+for i in range(4):
+    for j in range(570): 
+        tkeLES[i,j] = np.diag(RLES[i,j]).sum()/2
+a_ij_LES = np.array([myUQlib.anisotropyTensor(RLES[l], tkeLES[l], nCells_LES) for l in range(numLines)])
 
 # <codecell> Eigen decomposition of a_ij
 eValDet = np.zeros((numLines,nCells,3))
@@ -100,10 +120,10 @@ eVecSample = np.zeros((numLines,nCells,3,3))
 for l in range(numLines):
     eValSample[l], eVecSample[l] = myUQlib.eigenDecomposition(a_ij_Sample[l], nCells)
 
-eValLES = np.zeros((numLines,nCells,3))
-eVecLES = np.zeros((numLines,nCells,3,3))
+eValLES = np.zeros((numLines,nCells_LES,3))
+eVecLES = np.zeros((numLines,nCells_LES,3,3))
 for l in range(numLines):
-    eValLES[l], eVecLES[l] = myUQlib.eigenDecomposition(a_ij_LES[l], nCells)
+    eValLES[l], eVecLES[l] = myUQlib.eigenDecomposition(a_ij_LES[l], nCells_LES)
 
 # <codecell> Compute Barycentric Coordinates and its Viridis color values
 C_Det = np.array([myUQlib.baryCentricCoordinates(eValDet[l]) for l in range(numLines)])
@@ -118,17 +138,18 @@ clr_C_LES = myUQlib.bccViridisCmap(C_LES)
 # <codecell> plotBaryCentricCoordinateSystemWithCmap
 fig, ax = plt.subplots(ncols=1, nrows=1)
 myUQlib.plotBaryCentricCoordinateSystemWithCmap(ax)
-fig.savefig(DATA+casePngDir+'/baryCentricCoordinateSystemWithCmap.png', dpi=300, bbox_inches='tight')
+fig.savefig(DATA+casePngDir+'/baryCentricCoordinateSystemWithCmap.png', dpi=150, bbox_inches='tight')
 
 # <codecell> Figures settings
-myUQlib.rcParamsSettings(usetex=True)
+# myUQlib.rcParamsSettings(usetex=True)
 
-nrows = 2#3
+nrows = 3
 
 fig, ax = plt.subplots(ncols=numLines, nrows=nrows, constrained_layout=True,
                        figsize=(10,nrows*2.5), sharex=True, sharey=True)
 
 yNr = 37 # Need some generic expression!!
+yNr_LES = 15 # Need some generic expression!!
 
 row = 0
 for l in range(numLines):
@@ -161,21 +182,21 @@ for l in range(numLines):
     myUQlib.setTiks(ax[axIdx])
 
 
-# row = 2
-# for l in range(numLines):
-#     axIdx = (row,l)
+row = 2
+for l in range(numLines):
+    axIdx = (row,l)
 
-#     c=clr_C_LES[l].reshape(yNr,int(C_LES[l].shape[0]/yNr),-1)
-#     ax[axIdx].imshow(c, interpolation='bilinear', origin='lower',
-#                       extent=[y.min(),y.max(),z.min(),z.max()])
+    c=clr_C_LES[l].reshape(yNr_LES,int(C_LES[l].shape[0]/yNr_LES),-1)
+    ax[axIdx].imshow(c, interpolation='bilinear', origin='lower',
+                      extent=[y.min(),y.max(),z.min(),z.max()])
 
-#     myUQlib.drawCircle(ax[axIdx], ADloc[1]/D, ADloc[2]/D, 1/2)
-#     ax[axIdx].set_xlabel('$y/D$')
-#     if l==0: ax[axIdx].set_ylabel('$z/D$')
-#     myUQlib.setSpines(ax[axIdx])
-#     myUQlib.setTiks(ax[axIdx])
+    myUQlib.drawCircle(ax[axIdx], ADloc[1]/D, ADloc[2]/D, 1/2)
+    ax[axIdx].set_xlabel('$y/D$')
+    if l==0: ax[axIdx].set_ylabel('$z/D$')
+    myUQlib.setSpines(ax[axIdx])
+    myUQlib.setTiks(ax[axIdx])
 
-fig.savefig(DATA+casePngDir+'/anisoTensorContour.png', dpi=300, bbox_inches='tight')
+fig.savefig(DATA+casePngDir+'/anisoTensorContour.png', dpi=150, bbox_inches='tight')
 
 
 
