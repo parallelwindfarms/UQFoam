@@ -14,6 +14,7 @@ Using an exiting deterministec solver ```pimpleFoam```, a stoachastic solver bas
 [2] Intrusive Polynomial Chaos for CFD Using OpenFOAM. Computational Science, _ICCS 2020, Lecture Notes in Computer Science. Springer, Cham._
 
 Important steps of the algorithm implemented are shown in the figure (below). <br />
+
 <img src="scripts/PhDCodesGitImages/evolution_gPCPimpleFoam_RFs_wPimple_largerFontSize_1.png" align="center" width="500"/>
 
 
@@ -30,7 +31,7 @@ The above case setup is used in section 6.1 from \[1\] and can be found in [```t
 - For convinience we already provide these modes generated over a coarse mesh and projected onto the stochastic RANS simulation mesh. These projected modes can be located in the ```0``` directory as _expGpCoeffs*_. 
 - These eigenmodes will be used by the gPCModelFormFoam solver to contruct the PCE coefficients of the REVF (only at the start of the simulaiton).
 - Below are the first six KL expansion modes shifted and normalized to the range of 0 (darkest) and 1 (lightest).
-<img src="scripts/PhDCodesGitImages/First6_KLEmodes.png" align="center"  width="700"/>
+    <img src="scripts/PhDCodesGitImages/First6_KLEmodes.png" align="center"  width="700"/>
 
 #### 2) Uncertainty Propagation
 - The first mode of velocity and pressure are initialized using the solution from the deterministic simulation, to speed up the convergence of the stochastic solver. 
@@ -39,13 +40,14 @@ The above case setup is used in section 6.1 from \[1\] and can be found in [```t
 - Solver parameters of ```gPCModelFormSimpleFoam``` are controled by ```system/controlDict```. In this tutorial we have particularly used the following solver paramters: 
 
     ```C++
+    ...
     transientMode   on;
     expItrMax       1;
     Ptrunc          10;
+    ...
     ```
-- In the figure below: mean and variance of (a) turbulent viscosity, (b) streamwise velocity and (c) wall shear-stress at different locations in x-direction for the flow over periodic hills. Compared with deterministic (DET) and DNS results. Legend in (c) (top) applies to (a) and (b) as well.
-
-<img src="scripts/PhDCodesGitImages/results1.png" align="center" width="1000" />
+- In the figure below: mean and variance of (a) turbulent viscosity, (b) streamwise velocity and (c) wall shear-stress at different locations in x-direction for the flow over periodic hills. Compared with deterministic (DET) and DNS results. Legend in (c) (top) applies to (a) and (b) as well. 
+    <img src="scripts/PhDCodesGitImages/results1.png" align="center" width="1000" />
 
 ### Further Study
 - Varying correlation length scales
