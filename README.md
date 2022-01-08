@@ -41,9 +41,9 @@ The above case setup is used in section 6.1 from \[1\] and can be found in [```t
 
     ```C++
     ...
-    transientMode   on;
-    expItrMax       1;
-    Ptrunc          10;
+    transientMode   on;    // 'off' for steady-state simulation 
+    expItrMax       1;     // controls the number of explicit iterations
+    Ptrunc          10;    // controls the number of modes to be solved
     ...
     ```
 - In the figure below: mean and variance of (a) turbulent viscosity, (b) streamwise velocity and (c) wall shear-stress at different locations in x-direction for the flow over periodic hills. Compared with deterministic (DET) and DNS results. Legend in (c) (top) applies to (a) and (b) as well. 
