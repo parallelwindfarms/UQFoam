@@ -24,10 +24,10 @@ Important steps of the algorithm implemented are shown in the figure (below). <b
 <img src="scripts/PhDCodesGitImages/parameters.png" align="center" width="500" />
 
 ## Stochatic Simulation
-The above case setup is used in section 6.1 from \[1\] and can be found in [```tutorials as baseCase_PeriodicHill_REVF```](/OpenFOAM/p285464-v2012/tutorials/incompressible/gPCModelFormSimpleFoam/baseCase_PeriodicHill_REVF). The steps involed in setting up and running a stochastic RANS simulation for flow over _Periodic Hills_ with a _random eddy-viscoity field_ (REVF) are as follows:
+The above case setup is used in section 6.1 from \[1\] and can be found in [```tutorials as periodicHill_REVF```](/OpenFOAM/p285464-v2012/tutorials/incompressible/gPCModelFormFoam/periodicHill_REVF). The steps involed in setting up and running a stochastic RANS simulation for flow over _Periodic Hills_ with a _random eddy-viscoity field_ (REVF) are as follows:
 
 #### 1) Uncertainty Quantification 
-- After obtaining a (modeled) eddy viscosity field from a deterministic RANS simulation we can generate a Random Eddy Viscosity Field (REVF). The eigenmodes of the REVF can be obtained using a KL decomposition (```expGp_gPCKLE_LogNProc.py``` in [```tutorials as baseCase_PeriodicHill_REVF```](/OpenFOAM/p285464-v2012/tutorials/incompressible/gPCModelFormSimpleFoam/baseCase_PeriodicHill_REVF)). 
+- After obtaining a (modeled) eddy viscosity field from a deterministic RANS simulation we can generate a Random Eddy Viscosity Field (REVF). The eigenmodes of the REVF can be obtained using a KL decomposition (```expGp_gPCKLE_LogNProc.py``` in [```tutorials as periodicHill_REVF```](/OpenFOAM/p285464-v2012/tutorials/incompressible/gPCModelFormFoam/periodicHill_REVF)). 
 - For convinience we already provide these modes generated over a coarse mesh and projected onto the stochastic RANS simulation mesh. These projected modes can be located in the ```0``` directory as _expGpCoeffs*_. 
 - These eigenmodes will be used by the gPCModelFormFoam solver to contruct the PCE coefficients of the REVF (only at the start of the simulaiton).
 - Below are the first six KL expansion modes shifted and normalized to the range of 0 (darkest) and 1 (lightest).
@@ -37,7 +37,7 @@ The above case setup is used in section 6.1 from \[1\] and can be found in [```t
 - The first mode of velocity and pressure are initialized using the solution from the deterministic simulation, to speed up the convergence of the stochastic solver. 
 - Boundary conditions of the remaining modes are specified using ```0/UQpBC.H``` and ```0/UQUBC.H```. 
 - The discretization schemes in ```system/fvSchemes``` and the solver settings in ```system/fvSolution``` are the same as that of the deterministic simulation.
-- Solver parameters of ```gPCModelFormSimpleFoam``` are controled by ```system/controlDict```. In this tutorial we have particularly used the following solver paramters: 
+- Solver parameters of ```gPCModelFormFoam``` are controled by ```system/controlDict```. In this tutorial we have particularly used the following solver paramters: 
 
     ```C++
     ...
@@ -46,7 +46,9 @@ The above case setup is used in section 6.1 from \[1\] and can be found in [```t
     Ptrunc          10;    // controls the number of modes to be solved
     ...
     ```
-- In the figure below: mean and variance of (a) turbulent viscosity, (b) streamwise velocity and (c) wall shear-stress at different locations in x-direction for the flow over periodic hills. Compared with deterministic (DET) and DNS results. Legend in (c) (top) applies to (a) and (b) as well. 
+- The ```run``` script contains commands to run a batch job on SLURM based cluster. The solver returns all the modes of velocity and pressure at ```writeInterval``` in ```system/controlDict```.
+- Upon obtaining the PCEs of velocity and pressure, furhter post-processing to obtain PCEs of other QoIs (like wall-shear stess) is straight-forward. 
+- In the figure below we have mean and variance of (a) turbulent viscosity, (b) streamwise velocity and (c) wall shear-stress at different locations in x-direction for the flow over periodic hills. Compared with deterministic (DET) and DNS results. Legend in (c) (top) applies to (a) and (b) as well. 
     <img src="scripts/PhDCodesGitImages/results1.png" align="center" width="1000" />
 
 ### Further Study
