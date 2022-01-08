@@ -1,0 +1,72 @@
+type            surfaceFieldValue;
+libs            ("libfieldFunctionObjects.so");
+
+writeControl    writeTime;
+writeFields     true;
+
+surfaceFormat   raw;
+regionType      patch;
+name            hills;
+
+operation       none;
+
+fields
+(
+	tauWSigma
+	tauW0
+	tauW1
+	tauW2
+	tauW3
+	tauW4
+	tauW5
+	tauW6
+	tauW7
+	tauW8
+	tauW9
+	tauW10
+	tauW11
+	tauW12
+	tauW13
+	tauW14
+	tauW15
+	tauW16
+	tauW17
+	tauW18
+	tauW19
+	tauW20
+	tauW21
+	tauW22
+	tauW23
+	tauW24
+	tauW25
+	tauW26
+	tauW27
+	tauW28
+	tauW29
+	tauW30
+	tauW31
+	tauW32
+	tauW33
+	tauW34
+	tauW35
+	tauW36
+	tauW37
+	tauW38
+	tauW39
+	tauW40
+	tauW41
+	tauW42
+	tauW43
+	tauW44
+	tauW45
+	tauW46
+	tauW47
+	tauW48
+	tauW49
+	tauW50
+	tauW51
+	tauW52
+	tauW53
+	tauW54
+);
+

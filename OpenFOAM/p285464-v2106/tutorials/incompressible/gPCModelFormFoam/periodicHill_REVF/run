@@ -1,0 +1,55 @@
+#!/bin/bash
+
+###############################
+#SBATCH -J REVF_PerHill
+#SBATCH -o Job_%j
+#SBATCH -N 2
+#SBATCH -t 0-10:00:00
+#SBATCH -p gpu
+#SBATCH --exclusive
+#SBATCH --gpus-per-node=4
+#SBATCH --mem=8G 
+###############################
+
+nodes=1							# dunmmy value
+cores=$SLURM_NTASKS				# Total number of tasks 
+
+################################
+
+echo "Loading 2021 ..."
+module load 2021
+echo "Loading OpenFOAM/v2012-foss-2020a ..."
+module load OpenFOAM/v2106-foss-2021a
+echo "Sourcing OpenFOAM/v2012-foss-2020a ..."
+source $FOAM_BASH
+
+cd $PWD
+. ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions
+
+echo "Making log directory for log files ..."
+mkdir log
+
+################################
+
+echo "Running blockMesh ..."
+blockMesh                               				>& log/log.blockMesh
+
+echo "Running topoSet ..."
+topoSet												>& log/log.topoSet
+
+echo "Decompasing the domain ..."
+decomposePar -cellDist                           		>& log/log.decomposePar
+
+echo "Running solver ..."
+foamJob -s -p gPCModelFormFoam -parallel				>& log/log.solve
+
+echo "Reconstructing the solution ..."
+reconstructPar	-newTimes								>& log/log.reconstructPar
+
+echo "Removing processor* ..."
+rm -r processor* 2>/dev/null
+
+################################
+
+echo "Done."
+

@@ -1,0 +1,192 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v1906                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     gPCModelFormFoam;
+
+startFrom       latestTime;
+startTime       0;
+stopAt          endTime;
+endTime         1;
+deltaT          2e-4;
+writeControl    runTime;
+writeInterval   0.5;
+purgeWrite      0;
+
+writeFormat     ascii;
+writePrecision  6;
+writeCompression off;
+timeFormat      general;
+timePrecision   6;
+
+runTimeModifiable true;
+
+restartAvgTime  4;
+avgInterval		10;
+
+transientMode	on;
+expItrMax       1;
+//Ptrunc			10;
+
+tauWPatch		hills;
+
+simulationType	RAS;
+
+// ************************************************************************* //
+
+libs (
+	"libOpenFOAM.so"
+	//"libsimpleFunctionObjects.so"
+	//"libsimpleSwakFunctionObjects.so"
+	//"libswakFunctionObjects.so"
+	);
+	
+functions
+{    
+    /*yPlus
+    {
+
+	type 			patchExpression;
+	patches 		( hills top );
+    	outputControlMode	outputTime;
+	writeStartTime		no;
+	expression 		"dist()/nu0*sqrt((nu0+nut0)*mag(snGrad(U0)))";
+	verbose 		true;
+	accumulations 		( average );
+	
+    }*/
+	
+    fieldAverage1
+    {
+        type            fieldAverage;
+        libs            ("libfieldFunctionObjects.so");
+        enabled         true;
+        writeControl    writeTime;
+        restartTime	$restartAvgTime;
+
+        fields
+        (
+            p0
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+            pSigma
+            {
+             	mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+            p
+            {
+             	mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+
+            nut0
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+            nutSigma
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+            nut
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+
+
+            R0
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+            RSigma
+            {
+                mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+
+            U0
+            {
+                mean        on;
+                prime2Mean  on;
+                base        time;
+            }
+            USigma
+            {
+             	mean        on;
+                prime2Mean  off;
+                base        time;
+            }
+            U
+            {
+             	mean        on;
+                prime2Mean  on;
+                base        time;
+            }
+
+	);
+    }
+
+    probes
+    {
+
+        libs 			( "libsampling.so" );
+        type            probes;
+        name            P211;
+        writeControl    timeStep;
+
+        fields
+        (
+	    p
+            p0
+            pSigma
+            
+            U
+	    U0 
+	    UMean0
+            USigmaMean
+	    UMeanSigma	
+             
+            RMean0
+	    RMean0Mean
+            RSigmaMean
+	    RMeanSigma
+            
+        );
+
+        probeLocations
+        (
+            ( 0.056 0.014 0.063 )
+            ( 0.084 0.014 0.063 )
+        );
+    }
+
+
+}
+
