@@ -54,11 +54,15 @@ def plotBaryCentricCoordinateSystem(ax, lw=1.5):
     ax.axis('off')
 
 # <codecell> plotBaryCentricCoordinateSystemWithCmap(ax)
-def plotBaryCentricCoordinateSystemWithCmap(ax):
+def plotBaryCentricCoordinateSystemWithCmap(ax, cmap='rgb'):
     e1 = np.array([1,0])
     e2 = np.array([-1,0])
     e3 = np.array([0,np.sqrt(3)])
     
+    # e1 = np.array([1,0])
+    # e2 = np.array([0,0])
+    # e3 = np.array([1/2,np.sqrt(3)/2])
+
     nPts = 250
     grid_X = np.linspace(-1, 1, nPts)
     grid_Y = np.linspace(0, np.sqrt(3), nPts)
@@ -71,7 +75,10 @@ def plotBaryCentricCoordinateSystemWithCmap(ax):
     idxIn = p.contains_points(grid_XY)
     grid_XY = grid_XY[idxIn]
     
-    clr_grid_XY = bccViridisCmap(grid_XY.reshape(1,grid_XY.shape[0],2))
+    if cmap=='rgb':
+        clr_grid_XY = bccRGBCmap(grid_XY.reshape(1,grid_XY.shape[0],2))
+    else:
+        clr_grid_XY = bccViridisCmap(grid_XY.reshape(1,grid_XY.shape[0],2))
     ax.scatter(grid_XY[:,0], grid_XY[:,1], c=clr_grid_XY[0], marker='.', s=20, lw=0)
     ax.axis('off')
     
@@ -97,7 +104,41 @@ def bccViridisCmap(C):
     w_Pt_v2 = w_Pt_v2.reshape(C.shape[0], C.shape[1], 1)
     w_Pt_v3 = w_Pt_v3.reshape(C.shape[0], C.shape[1], 1)
     
-    return (w_Pt_v1*clr_v1 + w_Pt_v2*clr_v2 + w_Pt_v3*clr_v3)/(w_Pt_v1 + w_Pt_v2 + w_Pt_v3)
+    C_off, C_exp = 0.5, 5
+
+    w_Pt_v1 = (w_Pt_v1 + C_off) ** C_exp
+    w_Pt_v2 = (w_Pt_v2 + C_off) ** C_exp
+    w_Pt_v3 = (w_Pt_v3 + C_off) ** C_exp
+    
+    return (w_Pt_v1*clr_v1 + w_Pt_v2*clr_v2 + w_Pt_v3*clr_v3)/\
+        (w_Pt_v1 + w_Pt_v2 + w_Pt_v3)
+    
+# <codecell> bccRGBCmap
+def bccRGBCmap(C):
+    C_off, C_exp = 0, 1 #0.65, 5
+    
+    clr_v1 = np.array([[[1,0,0]]]); # r
+    clr_v2 = np.array([[[0,1,0]]]); # g
+    clr_v3 = np.array([[[0,0,1]]])  # b
+    
+    Pt = C.reshape(-1,2)
+    Pt[:,0] = (Pt[:,0] + 1) / 2
+    Pt[:,1] = Pt[:,1] / 2
+    
+    w_Pt_v3 = Pt[:,1]*2./np.sqrt(3)
+    w_Pt_v1 = Pt[:,0] - w_Pt_v3/2.
+    w_Pt_v2 = 1 - w_Pt_v1 - w_Pt_v3
+    
+    w_Pt_v1 = (w_Pt_v1 + C_off) ** C_exp
+    w_Pt_v2 = (w_Pt_v2 + C_off) ** C_exp
+    w_Pt_v3 = (w_Pt_v3 + C_off) ** C_exp
+
+    w_Pt_v1 = w_Pt_v1.reshape(C.shape[0], C.shape[1], 1)
+    w_Pt_v2 = w_Pt_v2.reshape(C.shape[0], C.shape[1], 1)
+    w_Pt_v3 = w_Pt_v3.reshape(C.shape[0], C.shape[1], 1)
+
+    return (w_Pt_v1*clr_v1 + w_Pt_v2*clr_v2 + w_Pt_v3*clr_v3)/\
+        (w_Pt_v1 + w_Pt_v2 + w_Pt_v3)
     
 # <codecell> drawCircle
 def drawCircle(axes, x, y, r, fc='none', ec='k', ls='-.', lw='1'):
