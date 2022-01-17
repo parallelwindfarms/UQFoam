@@ -243,9 +243,9 @@ else:
     fig.savefig(DATA+casePngDir+'/diskAvgdFields_PCE.png', dpi=150)
 
 
-# %%  ###############################################################################################
+# %%  #########################################################################
 # Plot over lines at different x locations
-#############################################################################################################
+###############################################################################
 
 # %% Importing LES, RANS, UQRANS data
 lines = (2,4,7,12)
@@ -300,6 +300,7 @@ pool.join()
 print(timer()-start, 's')
 
 # %% PCE of U
+UrefSamples = UrefSamples.reshape(-1,1,1)
 defUSamples = (UrefSamples-USamplesMag)/UrefSamples
 
 defU_PCEModes = np.zeros((Pplus1, yPts, numLines))
