@@ -6,7 +6,7 @@ Created on Fri Jan 29 15:21:21 2021
 @author: jigar
 """
 
-# <codecell> Import Required Modules and env vars
+# %% Import Required Modules and env vars
 from __future__ import print_function
 
 import os, sys
@@ -31,15 +31,15 @@ cwd = os.getcwd() + "/"
 
 import myUQlib
 
-# <codecell> Case details
+# %% Case details
 caseName   = cwd.split('/')[-2]
-casePngDir = '/2RRSTF/NIPC/' + caseName+'/png'
+casePngDir = '/2RRSTF/NIPC/uqPaperCases/' + caseName+'/png'
 
 if (os.path.exists(DATA+casePngDir))==False:
     print('Making new case data directory...')
     os.makedirs(DATA+casePngDir, exist_ok=True)
 
-# <codecell> Parametrs
+# %% Parametrs
 D = 80
 h = 70
 Uref = 8
@@ -53,7 +53,7 @@ nWT = 6#8#10
 # center of AD
 ADloc = (np.array([i*d_D for i in range(nWT)])*D,0,h)
 
-# <codecell> Setting the PCE parameters
+# %% Setting the PCE parameters
 nSamplesOrg = 30
 
 # delB = cp.Uniform(0,1) # w/ Uniform Sampling
@@ -71,16 +71,12 @@ Pplus1 = len(phi)
 
 nSamples = range(nSamplesOrg*3)
 
-# <codecell>  ###############################################################################################
+# %%  ###############################################################################################
 # Plot over centerline
 #############################################################################################################
 
-# <codecell> Read OpenFOAM case mesh access to grid and cell values
+# %% Read OpenFOAM case mesh access to grid and cell values
 vtkFile   = 'baseCase/VTK/baseCase_10000.vtk'
-# vtkFile   = 'baseCase_kEpStd/VTK/baseCase_kEpStd_2500.vtk'
-# vtkFile   = 'baseCase_LRRRSM/VTK/baseCase_LRRRSM_2500.vtk'
-# s = 80
-# vtkFile = 'sample_'+str(s)+'/VTK/'+'sample_'+str(s)+'_1000.vtk'
 
 mesh      = pv.UnstructuredGrid(cwd + vtkFile)
 nCells    = mesh.n_cells
@@ -94,24 +90,24 @@ x_D = cCenter[0:nx,0]/D
 
 nCellsInDisk = int(cIdxInDisk.shape[0]/nx)
 
-UDetMag = np.linalg.norm(mesh.cell_arrays['U'][cIdxInDisk], axis=1)
-tkeDet  = mesh.cell_arrays['k'][cIdxInDisk]
+UDetMag = np.linalg.norm(mesh.cell_data['U'][cIdxInDisk], axis=1)
+tkeDet  = mesh.cell_data['k'][cIdxInDisk]
 TIDet   = np.sqrt(tkeDet*2/3)/Uref *100
 
 defUDet     = (Uref-UDetMag)/Uref
 defUDetAvgd = np.average(np.reshape(defUDet, (nCellsInDisk, nx)), axis=0)
 TIDetAvgd   = np.average(np.reshape(TIDet-TIDet[0], (nCellsInDisk, nx)), axis=0)
 
-# <codecell> Importing LES, RANS, UQRANS data
-# U_LES  = np.loadtxt(DATA+"/0LES/Vestas2MWV80/LES_defU_centerline.csv")
-# TI_LES = np.loadtxt(DATA+"/0LES/Vestas2MWV80/LES_TI_centerline.csv")
+# %% Importing LES, RANS, UQRANS data
+defU_LES = np.loadtxt(DATA+"/0LES/HornRevWTs/defU.txt", delimiter=',')
+TI_LES = np.loadtxt(DATA+"/0LES/HornRevWTs/TI.txt", delimiter=',')
 
 def getSamplesOverDiskVol(cIdxInDisk, s):
     print(s)
     vtkFile = 'sample_'+str(s)+'/VTK/'+'sample_'+str(s)+'_10000.vtk'
     mesh    = pv.UnstructuredGrid(cwd + vtkFile)
-    UMag    = np.linalg.norm(mesh.cell_arrays['U'][cIdxInDisk], axis=1)
-    tke     = mesh.cell_arrays['k'][cIdxInDisk]
+    UMag    = np.linalg.norm(mesh.cell_data['U'][cIdxInDisk], axis=1)
+    tke     = mesh.cell_data['k'][cIdxInDisk]
     return UMag, tke
 
 pool = Pool(processes=8)
@@ -123,12 +119,14 @@ pool.close()
 pool.join()
 print(timer()-start, 's')
 
-UrefSamples = np.array([float(pd.read_csv('Samples_Uref/Uref'+str(i)).\
-              columns[0].strip(';').split()[1]) for i in range(len(nSamples))])
-UrefSamples = UrefSamples.reshape(-1,1)
+try:
+    UrefSamples = np.array([float(pd.read_csv('Samples_Uref/Uref'+str(i)).\
+                  columns[0].strip(';').split()[1]) for i in range(len(nSamples))])
+    UrefSamples = UrefSamples.reshape(-1,1)
+except FileNotFoundError:
+    UrefSamples = Uref
 
-# <codecell> PCE of U
-# defUSamples = (Uref-USamplesMag)/Uref
+# %% PCE of U
 defUSamples = (UrefSamples-USamplesMag)/UrefSamples
 defU_PCEApp = cp.fit_regression(phi, delBSamples, defUSamples)
 defU_PCEModes = (defU_PCEApp.coefficients).T
@@ -136,8 +134,7 @@ defU_PCEModes = (defU_PCEApp.coefficients).T
 defU0PCEAvgd     = np.average(np.reshape(defU_PCEModes[0], (nCellsInDisk, nx)), axis=0)
 defUSigmaPCEAvgd = np.average(np.reshape(np.sqrt(np.sum(defU_PCEModes[1:]**2, axis=0)), (nCellsInDisk, nx)), axis=0)
 
-## <codecell> PCE of TI
-# TISamples = np.sqrt(tkeSamples*2/3)/Uref *100
+## %% PCE of TI
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
 TISamples = TISamples - TISamples[:,0].reshape(-1,1)
 TI_PCEApp = cp.fit_regression(phi, delBSamples, TISamples)
@@ -146,13 +143,13 @@ TI_PCEModes = (TI_PCEApp.coefficients).T
 TI0PCEAvgd     = np.average(np.reshape(TI_PCEModes[0], (nCellsInDisk, nx)), axis=0)
 TISigmaPCEAvgd = np.average(np.reshape(np.sqrt(np.sum(TI_PCEModes[1:]**2, axis=0)), (nCellsInDisk, nx)), axis=0)
 
-# <codecell> Computing averaged U fields
+# %% Computing averaged U fields
 defUMean  = np.mean((UrefSamples-USamplesMag)/UrefSamples, axis=0)
 defUSigma = np.std((UrefSamples-USamplesMag)/UrefSamples, axis=0)
 defUMeanAvgd  = np.average(np.reshape(defUMean, (nCellsInDisk, nx)), axis=0)
 defUSigmaAvgd = np.average(np.reshape(defUSigma, (nCellsInDisk, nx)), axis=0)
 
-## <codecell> Computing averaged TI fields
+## %% Computing averaged TI fields
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
 TISamples = TISamples - TISamples[:,0].reshape(-1,1)
 TIMean    = np.mean(TISamples, axis=0)
@@ -161,7 +158,9 @@ TISigma   = np.std(TISamples, axis=0)
 TIMeanAvgd  = np.average(np.reshape(TIMean, (nCellsInDisk, nx)), axis=0)
 TISigmaAvgd = np.average(np.reshape(TISigma, (nCellsInDisk, nx)), axis=0)
 
-# <codecell> Figures settings
+TIMin = 5.5
+
+# %% Figures settings
 myUQlib.rcParamsSettings(15)
 
 DETClr  = (0.6350, 0.0780, 0.1840)
@@ -177,13 +176,15 @@ diskSpan = (ADloc[0]/D-Wdx/D/2, ADloc[0]/D+Wdx/D/2)
 MC = False
 MC = True
 
-if MC: N=4
-else: N=1
+if MC: N=4 # 4 for k-eps, 2 for LRR
+else: N=1 # 1 for k-eps, 0.5 for LRR
 
-fig, ax = plt.subplots(ncols=1, nrows=2, constrained_layout=True, sharex=True, figsize=(10,6))
+fig, ax = plt.subplots(ncols=1, nrows=2, constrained_layout=True, sharex=True, 
+                       figsize=(10,6))
 
 axIdx = 0
-# ax[axIdx].plot(U_LES[:-1,0], U_LES[:-1,1], color=LESClr, marker="o", mfc='none', lw=0)
+ax[axIdx].plot(defU_LES[:-1,0], defU_LES[:-1,1], color=LESClr, marker="o", 
+               mfc='none', lw=0, ms=3)
 ax[axIdx].plot(x_D, defUDetAvgd, color=DETClr)
 
 if MC==True:
@@ -197,114 +198,110 @@ else:
                                 defU0PCEAvgd - N*defUSigmaPCEAvgd, \
                                 alpha=0.2, linewidth=0, color='b')
 
-#myUQlib.plotDiskSpans(ax[axIdx], ADloc[0]/D, Wdx/D)
+# myUQlib.plotDiskSpans(ax[axIdx], ADloc[0]/D, Wdx/D)
 ax[axIdx].set_ylim(bottom=0.0,top=0.6)
 ax[axIdx].set_yticks([0.0, 0.2, 0.4, 0.6])
-# ax[axIdx].set_xlim(left=-4,right=25)
-# ax[axIdx].set_xlabel('$x/D$')
 ax[axIdx].set_ylabel('$\Delta u / u_h$')
 ax[axIdx].spines['right'].set_visible(False)
 ax[axIdx].spines['top'].set_visible(False)
 
 axIdx = 1
-# ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1], color=LESClr, marker="o", mfc='none', lw=0)
-ax[axIdx].plot(x_D, TIDetAvgd, color=DETClr)
+ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1]-TI_LES[:-1,1].min()+TIMin,
+               color=LESClr, marker="o", mfc='none', lw=0, ms=3)
+ax[axIdx].plot(x_D, TIDetAvgd + TIMin, color=DETClr)
 
 if MC==True:
-    ax[axIdx].plot(x_D, TIMeanAvgd, color=meanClr)
-    ax[axIdx].fill_between(x_D, TIMeanAvgd + N*TISigmaAvgd,
-                                TIMeanAvgd - N*TISigmaAvgd, \
+    ax[axIdx].plot(x_D, TIMeanAvgd + TIMin, color=meanClr)
+    ax[axIdx].fill_between(x_D, TIMeanAvgd + N*TISigmaAvgd + TIMin,
+                                TIMeanAvgd - N*TISigmaAvgd + TIMin, \
                                 alpha=0.2, linewidth=0, color='b')
 else:
-    ax[axIdx].plot(x_D, TI0PCEAvgd, color=meanClr)
-    ax[axIdx].fill_between(x_D, TI0PCEAvgd + N*TISigmaPCEAvgd,
-                                TI0PCEAvgd - N*TISigmaPCEAvgd, \
+    ax[axIdx].plot(x_D, TI0PCEAvgd + TIMin, color=meanClr)
+    ax[axIdx].fill_between(x_D, TI0PCEAvgd + N*TISigmaPCEAvgd + TIMin,
+                                TI0PCEAvgd - N*TISigmaPCEAvgd + TIMin, \
                                 alpha=0.2, linewidth=0, color='b')
 
-#myUQlib.plotDiskSpans(ax[axIdx], ADloc[0]/D, Wdx/D)
-ax[axIdx].set_ylim(bottom=0,top=12)
-ax[axIdx].set_yticks([0, 4, 8, 12])
+# myUQlib.plotDiskSpans(ax[axIdx], ADloc[0]/D, Wdx/D)
+ax[axIdx].set_ylim(bottom=2.5,top=17.5)
+ax[axIdx].set_yticks([5, 10, 15])
 ax[axIdx].set_xlim(left=-4,right=45)
 ax[axIdx].set_xticks(list(ADloc[0]/D)+[45.0])
-# ax[axIdx].set_xticklabels([str(7*i)+' $(WT$'+str(i+1)+'$)$' for i in range(6)])
-# ax[axIdx].set_xlabel('$x/D \ (WT\#)$')
 ax[axIdx].set_xlabel('$x/D$')
-ax[axIdx].set_ylabel('$I_{add} [\\%]$')
+ax[axIdx].set_ylabel('$I [\\%]$')
 ax[axIdx].spines['right'].set_visible(False)
 ax[axIdx].spines['top'].set_visible(False)
 
-ax[0].legend(['DET', r'$\textbf{E}[\bullet]$',
-              r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$',
-              ],
-              ncol=3, frameon=False, loc=(0.2,1.1))
+ax[0].legend(['LES', 'DET', r'$\textbf{E}[\bullet]$',
+              r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
+              ncol=4, frameon=False, columnspacing=0.75,
+              loc='upper center', bbox_to_anchor=(0.5, 1.35))
 
 ax[0].grid(axis='x')
 ax[1].grid(axis='x')
 
-
-if MC==True:
-    fig.savefig(DATA+casePngDir+'/diskAvgdFields_MC_N'+str(N)+'.png', dpi=300)
+if MC:
+    fig.savefig(DATA+casePngDir+'/diskAvgdFields_MC.png', dpi=150)
 else:
-    fig.savefig(DATA+casePngDir+'/diskAvgdFields_PCE_N'+str(N)+'.png', dpi=300)
-
-# <codecell>  ###############################################################################################
+    fig.savefig(DATA+casePngDir+'/diskAvgdFields_PCE.png', dpi=150)
+    
+# %%  ###############################################################################################
 # Plot over lines at different x locations
 #############################################################################################################
 
-# <codecell> Importing LES, RANS, UQRANS data
-lines = (2,4,7,12)
+# %% Importing LES, RANS, UQRANS data
+lines = (1,2,3,4,5,6)
+
+# % Load LES data ###############
+defULES, TILES = [], []
+
+for l in lines:
+    defULES.append(np.loadtxt(DATA+"/0LES/HornRevWTs/defU_x_D_5_WT"+str(l)+'.txt', delimiter=','))
+    TILES.append(np.loadtxt(DATA+"/0LES/HornRevWTs/TI_x_D_5_WT"+str(l)+'.txt', delimiter=','))
+
+# % Load DET data ###############
 numLines = len(lines)
 yPts = 100
 nCells = numLines*yPts
 
-# Load LES data ###############
-yByDLES = np.loadtxt(DATA+"/0LES/Vestas2MWV80/LES_xByD_2_defU.csv")[:,1]
-defULES = np.loadtxt(DATA+"/0LES/Vestas2MWV80/LES_xByD_2_defU.csv")[:,0].reshape((len(yByDLES),1))
-TILES   = np.loadtxt(DATA+"/0LES/Vestas2MWV80/LES_xByD_2_TI.csv")[:,0].reshape((len(yByDLES),1))
-
-for l in range(1,numLines):
-    fileName = DATA+"/0LES/Vestas2MWV80/LES_xByD_"+str(lines[l])
-    defULES  = np.hstack( (defULES, np.loadtxt(fileName+"_defU.csv")[:,0].reshape((len(yByDLES),1))) )
-    TILES    = np.hstack( (TILES, np.loadtxt(fileName+"_TI.csv")[:,0].reshape((len(yByDLES),1))) )
-
-# Load DET data ###############
 baseCase = 'baseCase/'
-sampleDir = 'postProcessing/sample/2500/'
+sampleDir = 'postProcessing/sample/10000/'
 
-yByD    = np.loadtxt(baseCase + sampleDir + "X_by_D_2_U.xy")[:,0] / D
-UDetMag = np.linalg.norm(np.loadtxt(baseCase + sampleDir + "X_by_D_2_U.xy")[:,1:], axis=1, keepdims=True)
-tkeDet  = (np.loadtxt(baseCase + sampleDir + "X_by_D_2_k_nut_p.xy")[:,1]).reshape((yPts,1))
+yByD    = np.loadtxt(baseCase + sampleDir + "AD1_X_by_D_5_U.xy")[:,0] / D
+UDetMag = np.linalg.norm(np.loadtxt(baseCase + sampleDir + "AD1_X_by_D_5_U.xy")[:,1:], axis=1, keepdims=True)
+tkeDet  = (np.loadtxt(baseCase + sampleDir + "AD1_X_by_D_5_k_nut_p.xy")[:,1]).reshape((yPts,1))
 
-for l in range(1,numLines):
-    fileName = baseCase + sampleDir+'/X_by_D_'+str(lines[l])
+for l in lines[1:]:
+    fileName = baseCase + sampleDir+'AD'+str(l)+'_X_by_D_5'
     UDetMag  = np.hstack( (UDetMag, np.linalg.norm(np.loadtxt(fileName+'_U.xy')[:,1:], axis=1, keepdims=True)) )
     tkeDet   = np.hstack( (tkeDet, (np.loadtxt(fileName+'_k_nut_p.xy')[:,1]).reshape((yPts,1))) )
 
-# Load UQRANS data ###############
-def getSamplesOverLines(sampleDir, numLines, lines, yPts, s):
+# % Load UQRANS data ###############
+def getSamplesOverLines(sampleDir, lines, yPts, s):
     print(s)
     baseCase = 'sample_'+str(s)+'/'
-    UMag = np.linalg.norm(np.loadtxt(baseCase + sampleDir + "X_by_D_2_U.xy")[:,1:], axis=1, keepdims=True)
-    tke  = (np.loadtxt(baseCase + sampleDir + "X_by_D_2_k_nut_p.xy")[:,1]).reshape((yPts,1))
+    UMag = np.linalg.norm(np.loadtxt(baseCase + sampleDir + "AD1_X_by_D_5_U.xy")[:,1:], axis=1, keepdims=True)
+    tke  = (np.loadtxt(baseCase + sampleDir + "AD1_X_by_D_5_k_nut_p.xy")[:,1]).reshape((yPts,1))
 
-    for l in range(1,numLines):
-        fileName = baseCase + sampleDir+'/X_by_D_'+str(lines[l])
-        UMag  = np.hstack( (UMag, np.linalg.norm(np.loadtxt(fileName+'_U.xy')[:,1:], axis=1, keepdims=True)) )
-        tke   = np.hstack( (tke, (np.loadtxt(fileName+'_k_nut_p.xy')[:,1]).reshape((yPts,1))) )
+    for l in lines[1:]:
+        fileName = baseCase + sampleDir+'AD'+str(l)+'_X_by_D_5'
+        UMag = np.hstack( (UMag, np.linalg.norm(np.loadtxt(fileName+'_U.xy')[:,1:], axis=1, keepdims=True)) )
+        tke = np.hstack( (tke, (np.loadtxt(fileName+'_k_nut_p.xy')[:,1]).reshape((yPts,1))) )
 
     return UMag, tke
 
-pool = Pool(processes=4)
+pool = Pool(processes=8)
 start = timer()
-data = pool.map(partial(getSamplesOverLines, sampleDir, numLines, lines, yPts), (nSamples))
+data = pool.map(partial(getSamplesOverLines, sampleDir, lines, yPts), (nSamples))
 USamplesMag = np.array([data[s][0] for s in range(len(nSamples))])
 tkeSamples = np.array([data[s][1] for s in range(len(nSamples))])
 pool.close()
 pool.join()
 print(timer()-start, 's')
 
-# <codecell> PCE of U
-defUSamples   = (Uref-USamplesMag)/Uref
+# %% PCE of U
+UrefSamples = UrefSamples.reshape(-1,1,1)
+
+defUSamples = (UrefSamples-USamplesMag)/UrefSamples
 
 defU_PCEModes = np.zeros((Pplus1, yPts, numLines))
 for l in range(numLines):
@@ -314,8 +311,9 @@ for l in range(numLines):
 defU0PCE     = defU_PCEModes[0]
 defUSigmaPCE = np.sqrt(np.sum(defU_PCEModes[1:]**2, axis=0))
 
-# <codecell> PCE of TI
-TISamples   = np.sqrt(tkeSamples*2/3)/Uref *100
+# % PCE of TI
+TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
+TISamples = TISamples - TISamples.min(axis=1, keepdims=True)
 
 TI_PCEModes = np.zeros((Pplus1, yPts, numLines))
 for l in range(numLines):
@@ -326,25 +324,24 @@ TI_PCEModes = np.array(TI_PCEModes)
 TI0PCE     = TI_PCEModes[0]
 TISigmaPCE = np.sqrt(np.sum(TI_PCEModes[1:]**2, axis=0))
 
-# <codecell> Computing averaged U fields
-USamplesMagMean  = np.mean(USamplesMag, axis=0)
-USamplesMagSigma = np.std(USamplesMag, axis=0)
-
+# %% Computing averaged U fields
 defUDet   = (Uref-UDetMag)/Uref
-defUMean  = (Uref-USamplesMagMean)/Uref
-defUSigma = USamplesMagSigma/Uref
+UrefSamples = UrefSamples.reshape(-1,1,1)
+defUMean  = np.mean((UrefSamples-USamplesMag)/UrefSamples, axis=0)
+defUSigma = np.std((UrefSamples-USamplesMag)/UrefSamples, axis=0)
 
-# <codecell> Computing averaged TI fields
+# %% Computing averaged TI fields
 TIDet     = np.sqrt(tkeDet*2/3)/Uref *100
-TISamples = np.sqrt(tkeSamples*2/3)/Uref *100
-TIMean  = np.mean(TISamples, axis=0)
-TISigma = np.std(TISamples, axis=0)
+TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
+TISamples = TISamples - TISamples.min(axis=1, keepdims=True)
+TIMean    = np.mean(TISamples, axis=0)
+TISigma   = np.std(TISamples, axis=0)
 
-# <codecell> Plot settings
-myUQlib.rcParamsSettings(15)
+TIMin = TIDet.min(axis=0)
 
-# <codecell> Figures settings
+# %% Figures settings
 # rcParams.update({'figure.figsize': [15,7]})
+myUQlib.rcParamsSettings(22.5)
 
 DETClr  = (0.6350, 0.0780, 0.1840)
 meanClr = 'b'
@@ -352,18 +349,20 @@ fillClr = 'b'
 LESClr  = 'k'
 
 MC = False
-MC = True
+# MC = True
 
-if MC: N=2
-else:  N=2
+if MC: N=2 # 4 for k-eps, 2 for LRR
+else: N=0.5 # 1 for k-eps, 0.5 for LRR
 
-fig, ax = plt.subplots(ncols=numLines, nrows=2, constrained_layout=True, figsize=(10,6), sharey=True)
+fig, ax = plt.subplots(ncols=numLines, nrows=2, constrained_layout=True, 
+                       figsize=(15,6), sharey=True)
 
 row = 0
 for l in range(numLines):
     axIdx = (row,l)
 
-    ax[axIdx].plot(defULES[:,axIdx[1]], yByDLES, color=LESClr, marker="o", mfc='none', lw=0)
+    ax[axIdx].plot(defULES[l][:,0], defULES[l][:,1], color=LESClr, marker="o", 
+                   mfc='none', lw=0, ms=4.5)
     ax[axIdx].plot(defUDet[:,axIdx[1]], yByD, color=DETClr)
 
     if MC:
@@ -385,43 +384,42 @@ for l in range(numLines):
     if l==0: ax[axIdx].set_ylabel('$y/D$')
     ax[axIdx].spines['right'].set_visible(False)
     ax[axIdx].spines['top'].set_visible(False)
-    ax[axIdx].set_title('$x/D=$ ' + str(lines[l]), pad=20)
+    ax[axIdx].set_title('WT ' + str(lines[l]), pad=20)
 
 row = 1
 for l in range(numLines):
     axIdx = (row,l)
 
-    ax[axIdx].plot(TILES[:,axIdx[1]], yByDLES, color=LESClr, marker="o", mfc='none', lw=0)
+    ax[axIdx].plot(TILES[l][:,0], TILES[l][:,1], color=LESClr, marker="o", 
+                   mfc='none', lw=0, ms=4.5)
     ax[axIdx].plot(TIDet[:,axIdx[1]], yByD, color=DETClr)
 
     if MC:
-        ax[axIdx].plot(TIMean[:,axIdx[1]], yByD, color=meanClr)
-        ax[axIdx].fill_betweenx(yByD, TIMean[:,axIdx[1]] + N*TISigma[:,axIdx[1]], \
-                                      TIMean[:,axIdx[1]] - N*TISigma[:,axIdx[1]], \
+        ax[axIdx].plot(TIMean[:,axIdx[1]] + TIMin[l], yByD, color=meanClr)
+        ax[axIdx].fill_betweenx(yByD, TIMean[:,axIdx[1]] + N*TISigma[:,axIdx[1]] + TIMin[l], \
+                                      TIMean[:,axIdx[1]] - N*TISigma[:,axIdx[1]] + TIMin[l], \
                                       alpha=0.2, linewidth=0, color='b')
     else:
-        ax[axIdx].plot(TI0PCE[:,axIdx[1]], yByD, color=meanClr)
-        ax[axIdx].fill_betweenx(yByD, TI0PCE[:,axIdx[1]] + N*TISigmaPCE[:,axIdx[1]], \
-                                      TI0PCE[:,axIdx[1]] - N*TISigmaPCE[:,axIdx[1]], \
+        ax[axIdx].plot(TI0PCE[:,axIdx[1]] + TIMin[l], yByD, color=meanClr)
+        ax[axIdx].fill_betweenx(yByD, TI0PCE[:,axIdx[1]] + N*TISigmaPCE[:,axIdx[1]] + TIMin[l], \
+                                      TI0PCE[:,axIdx[1]] - N*TISigmaPCE[:,axIdx[1]] + TIMin[l], \
                                       alpha=0.2, linewidth=0, color='b')
 
     ax[axIdx].axhline(0, color='k', ls="-.")
     ax[axIdx].set_ylim(bottom=-1,top=1)
-    ax[axIdx].set_xlim(left=0,right=15)
-    ax[axIdx].set_xticks([0, 5, 10, 15])
+    ax[axIdx].set_xlim(left=2.5,right=17.5)
+    ax[axIdx].set_xticks([5, 10, 15])
     ax[axIdx].set_xlabel('$I [\\%]$')
     if l==0: ax[axIdx].set_ylabel('$y/D$')
     ax[axIdx].spines['right'].set_visible(False)
     ax[axIdx].spines['top'].set_visible(False)
-    # ax[axIdx].set_title('$x/D=$ ' + str(lines[l]))
 
-# fig.legend(['LES', 'DET', r'$\textbf{E}[\bullet]$', '_nolegend_',
-#             r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
-#             ncol=4, frameon=False, columnspacing=0.75,
-#             loc='upper center', bbox_to_anchor=(0.5, 1.15))
+fig.legend(['LES', 'DET', r'$\textbf{E}[\bullet]$',
+            r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
+            ncol=4, frameon=False, columnspacing=0.75,
+            loc='upper center', bbox_to_anchor=(0.5, 1.15))
 
 if MC:
-    fig.savefig(DATA+casePngDir+'/defU_TI_xByD_2_4_7_12_MC.png', dpi=300, bbox_inches='tight')
+    fig.savefig(DATA+casePngDir+'/defU_TI_xByD_5_WT1to6_MC.png', dpi=150, bbox_inches='tight')
 else:
-    fig.savefig(DATA+casePngDir+'/defU_TI_xByD_2_4_7_12_PCE.png', dpi=300, bbox_inches='tight')
-
+    fig.savefig(DATA+casePngDir+'/defU_TI_xByD_5_WT1to6_PCE.png', dpi=150, bbox_inches='tight')

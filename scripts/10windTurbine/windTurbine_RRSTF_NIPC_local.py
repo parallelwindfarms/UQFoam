@@ -301,8 +301,8 @@ print(timer()-start, 's')
 
 # %% PCE of U
 UrefSamples = UrefSamples.reshape(-1,1,1)
-defUSamples = (UrefSamples-USamplesMag)/UrefSamples
 
+defUSamples = (UrefSamples-USamplesMag)/UrefSamples
 defU_PCEModes = np.zeros((Pplus1, yPts, numLines))
 for l in range(numLines):
     defU_PCEApp = cp.fit_regression(phi, delBSamples, defUSamples[:,:,l])
@@ -388,7 +388,8 @@ row = 1
 for l in range(numLines):
     axIdx = (row,l)
 
-    ax[axIdx].plot(TILES[:,axIdx[1]], yByDLES, color=LESClr, marker="o", mfc='none', lw=0, ms=3)
+    ax[axIdx].plot(TILES[:,axIdx[1]], yByDLES, color=LESClr, marker="o", 
+                   mfc='none', lw=0, ms=3)
     ax[axIdx].plot(TIDet[:,axIdx[1]], yByD, color=DETClr)
 
     if MC:
