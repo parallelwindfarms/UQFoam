@@ -96,7 +96,8 @@ TIDet   = np.sqrt(tkeDet*2/3)/Uref *100
 
 defUDet     = (Uref-UDetMag)/Uref
 defUDetAvgd = np.average(np.reshape(defUDet, (nCellsInDisk, nx)), axis=0)
-TIDetAvgd   = np.average(np.reshape(TIDet-TIDet[0], (nCellsInDisk, nx)), axis=0)
+# TIDetAvgd   = np.average(np.reshape(TIDet-TIDet[0], (nCellsInDisk, nx)), axis=0)
+TIDetAvgd   = np.average(np.reshape(TIDet, (nCellsInDisk, nx)), axis=0)
 
 # %% Importing LES, RANS, UQRANS data
 U_LES  = np.loadtxt(DATA+"/0LES/Vestas2MWV80/LES_defU_centerline.csv")
@@ -136,7 +137,7 @@ defUSigmaPCEAvgd = np.average(np.reshape(np.sqrt(np.sum(defU_PCEModes[1:]**2, ax
 
 ## %% PCE of TI
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
-TISamples = TISamples - TISamples[:,0].reshape(-1,1)
+TISamples = TISamples #- TISamples[:,0].reshape(-1,1)
 TI_PCEApp = cp.fit_regression(phi, delBSamples, TISamples)
 TI_PCEModes = (TI_PCEApp.coefficients).T
 
@@ -151,14 +152,14 @@ defUSigmaAvgd = np.average(np.reshape(defUSigma, (nCellsInDisk, nx)), axis=0)
 
 ## %% Computing averaged TI fields
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
-TISamples = TISamples - TISamples[:,0].reshape(-1,1)
+TISamples = TISamples #- TISamples[:,0].reshape(-1,1)
 TIMean    = np.mean(TISamples, axis=0)
 TISigma   = np.std(TISamples, axis=0)
 
 TIMeanAvgd  = np.average(np.reshape(TIMean, (nCellsInDisk, nx)), axis=0)
 TISigmaAvgd = np.average(np.reshape(TISigma, (nCellsInDisk, nx)), axis=0)
 
-TIMin = 5.5
+TIMin = -0.5
 
 # %% Figures settings
 myUQlib.rcParamsSettings(15)
@@ -174,11 +175,11 @@ diskSpan = (ADloc[0]/D-Wdx/D/2, ADloc[0]/D+Wdx/D/2)
 # Plotting averaged fields
 
 MC = False
-# MC = True
+MC = True
 
 
-if MC: N=4
-else: N=2
+if MC: N=2
+else: N=1
 
 fig, ax = plt.subplots(ncols=1, nrows=2, constrained_layout=True, sharex=True, 
                        figsize=(10,6))
@@ -190,8 +191,8 @@ ax[axIdx].plot(x_D, defUDetAvgd, color=DETClr)
 
 if MC==True:
     ax[axIdx].plot(x_D, defUMeanAvgd, color=meanClr)
-    ax[axIdx].fill_between(x_D, defUMeanAvgd + N*defUSigmaAvgd, \
-                                defUMeanAvgd - N*defUSigmaAvgd, \
+    ax[axIdx].fill_between(x_D, defUMeanAvgd + 2*N*defUSigmaAvgd, \
+                                defUMeanAvgd - 2*N*defUSigmaAvgd, \
                                 alpha=0.2, linewidth=0, color='b')
 else:
     ax[axIdx].plot(x_D, defU0PCEAvgd, color=meanClr)
@@ -207,7 +208,7 @@ ax[axIdx].spines['right'].set_visible(False)
 ax[axIdx].spines['top'].set_visible(False)
 
 axIdx = 1
-ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1]-TI_LES[:-1,1].min()+TIMin, 
+ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1],#-TI_LES[:-1,1].min()+TIMin, 
                color=LESClr, marker="o", mfc='none', lw=0, ms=3)
 ax[axIdx].plot(x_D, TIDetAvgd + TIMin, color=DETClr)
 
@@ -232,7 +233,7 @@ ax[axIdx].set_ylabel('$I [\\%]$')
 ax[axIdx].spines['right'].set_visible(False)
 ax[axIdx].spines['top'].set_visible(False)
 
-ax[0].legend(['LES', 'DET', r'$\textbf{E}[\bullet]$', '_nolegend_',
+ax[0].legend(['LES', 'DET', r'$\textbf{E}[\bullet]$',
               r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
               ncol=4, frameon=False, columnspacing=0.75,
               loc='upper center', bbox_to_anchor=(0.5, 1.35))
@@ -313,7 +314,7 @@ defUSigmaPCE = np.sqrt(np.sum(defU_PCEModes[1:]**2, axis=0))
 
 ## %% PCE of TI
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
-TISamples = TISamples - TISamples.min(axis=1, keepdims=True)
+TISamples = TISamples #- TISamples.min(axis=1, keepdims=True)
 
 TI_PCEModes = np.zeros((Pplus1, yPts, numLines))
 for l in range(numLines):
@@ -330,14 +331,14 @@ UrefSamples = UrefSamples.reshape(-1,1,1)
 defUMean  = np.mean((UrefSamples-USamplesMag)/UrefSamples, axis=0)
 defUSigma = np.std((UrefSamples-USamplesMag)/UrefSamples, axis=0)
 
-# %% Computing averaged TI fields
+#  Computing averaged TI fields
 TIDet     = np.sqrt(tkeDet*2/3)/Uref *100
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
-TISamples = TISamples - TISamples.min(axis=1, keepdims=True)
+TISamples = TISamples #- TISamples.min(axis=1, keepdims=True)
 TIMean    = np.mean(TISamples, axis=0)
 TISigma   = np.std(TISamples, axis=0)
 
-TIMin = TIDet.min(axis=0)
+TIMin = -0.5
 
 # %% Figures settings
 myUQlib.rcParamsSettings(15)
@@ -348,10 +349,10 @@ fillClr = 'b'
 LESClr  = 'k'
 
 MC = False
-# MC = True
+MC = True
 
-if MC: N=4
-else:  N=2
+if MC: N=2
+else:  N=1
 
 fig, ax = plt.subplots(ncols=numLines, nrows=2, constrained_layout=True, 
                        figsize=(10,6), sharey=True)
@@ -365,8 +366,8 @@ for l in range(numLines):
 
     if MC:
         ax[axIdx].plot(defUMean[:,axIdx[1]], yByD, color=meanClr)
-        ax[axIdx].fill_betweenx(yByD, defUMean[:,axIdx[1]] + N*defUSigma[:,axIdx[1]], \
-                                      defUMean[:,axIdx[1]] - N*defUSigma[:,axIdx[1]], \
+        ax[axIdx].fill_betweenx(yByD, defUMean[:,axIdx[1]] + 2*N*defUSigma[:,axIdx[1]], \
+                                      defUMean[:,axIdx[1]] - 2*N*defUSigma[:,axIdx[1]], \
                                       alpha=0.2, linewidth=0, color='b')
     else:
         ax[axIdx].plot(defU0PCE[:,axIdx[1]], yByD, color=meanClr)
@@ -390,17 +391,17 @@ for l in range(numLines):
 
     ax[axIdx].plot(TILES[:,axIdx[1]], yByDLES, color=LESClr, marker="o", 
                    mfc='none', lw=0, ms=3)
-    ax[axIdx].plot(TIDet[:,axIdx[1]], yByD, color=DETClr)
+    ax[axIdx].plot(TIDet[:,axIdx[1]] + TIMin, yByD, color=DETClr)
 
     if MC:
-        ax[axIdx].plot(TIMean[:,axIdx[1]] + TIMin[l], yByD, color=meanClr)
-        ax[axIdx].fill_betweenx(yByD, TIMean[:,axIdx[1]] + N*TISigma[:,axIdx[1]] + TIMin[l], \
-                                      TIMean[:,axIdx[1]] - N*TISigma[:,axIdx[1]] + TIMin[l], \
+        ax[axIdx].plot(TIMean[:,axIdx[1]] + TIMin, yByD, color=meanClr)
+        ax[axIdx].fill_betweenx(yByD, TIMean[:,axIdx[1]] + N*TISigma[:,axIdx[1]] + TIMin, \
+                                      TIMean[:,axIdx[1]] - N*TISigma[:,axIdx[1]] + TIMin, \
                                       alpha=0.2, linewidth=0, color='b')
     else:
-        ax[axIdx].plot(TI0PCE[:,axIdx[1]] + TIMin[l], yByD, color=meanClr)
-        ax[axIdx].fill_betweenx(yByD, TI0PCE[:,axIdx[1]] + N*TISigmaPCE[:,axIdx[1]] + TIMin[l], \
-                                      TI0PCE[:,axIdx[1]] - N*TISigmaPCE[:,axIdx[1]] + TIMin[l], \
+        ax[axIdx].plot(TI0PCE[:,axIdx[1]] + TIMin, yByD, color=meanClr)
+        ax[axIdx].fill_betweenx(yByD, TI0PCE[:,axIdx[1]] + N*TISigmaPCE[:,axIdx[1]] + TIMin, \
+                                      TI0PCE[:,axIdx[1]] - N*TISigmaPCE[:,axIdx[1]] + TIMin, \
                                       alpha=0.2, linewidth=0, color='b')
 
     ax[axIdx].axhline(0, color='k', ls="-.")
@@ -412,7 +413,7 @@ for l in range(numLines):
     ax[axIdx].spines['right'].set_visible(False)
     ax[axIdx].spines['top'].set_visible(False)
 
-fig.legend(['LES', 'DET', r'$\textbf{E}[\bullet]$', '_nolegend_',
+fig.legend(['LES', 'DET', r'$\textbf{E}[\bullet]$',
             r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
             ncol=4, frameon=False, columnspacing=0.75,
             loc='upper center', bbox_to_anchor=(0.5, 1.15))

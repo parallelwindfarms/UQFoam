@@ -96,7 +96,8 @@ TIDet   = np.sqrt(tkeDet*2/3)/Uref *100
 
 defUDet     = (Uref-UDetMag)/Uref
 defUDetAvgd = np.average(np.reshape(defUDet, (nCellsInDisk, nx)), axis=0)
-TIDetAvgd   = np.average(np.reshape(TIDet-TIDet[0], (nCellsInDisk, nx)), axis=0)
+# TIDetAvgd   = np.average(np.reshape(TIDet-TIDet[0], (nCellsInDisk, nx)), axis=0)
+TIDetAvgd   = np.average(np.reshape(TIDet, (nCellsInDisk, nx)), axis=0)
 
 # %% Importing LES, RANS, UQRANS data
 defU_LES = np.loadtxt(DATA+"/0LES/HornRevWTs/defU.txt", delimiter=',')
@@ -136,7 +137,7 @@ defUSigmaPCEAvgd = np.average(np.reshape(np.sqrt(np.sum(defU_PCEModes[1:]**2, ax
 
 ## %% PCE of TI
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
-TISamples = TISamples - TISamples[:,0].reshape(-1,1)
+TISamples = TISamples #- TISamples[:,0].reshape(-1,1)
 TI_PCEApp = cp.fit_regression(phi, delBSamples, TISamples)
 TI_PCEModes = (TI_PCEApp.coefficients).T
 
@@ -151,14 +152,14 @@ defUSigmaAvgd = np.average(np.reshape(defUSigma, (nCellsInDisk, nx)), axis=0)
 
 ## %% Computing averaged TI fields
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
-TISamples = TISamples - TISamples[:,0].reshape(-1,1)
+TISamples = TISamples #- TISamples[:,0].reshape(-1,1)
 TIMean    = np.mean(TISamples, axis=0)
 TISigma   = np.std(TISamples, axis=0)
 
 TIMeanAvgd  = np.average(np.reshape(TIMean, (nCellsInDisk, nx)), axis=0)
 TISigmaAvgd = np.average(np.reshape(TISigma, (nCellsInDisk, nx)), axis=0)
 
-TIMin = 5.5
+TIMin = 5.5 * 0
 
 # %% Figures settings
 myUQlib.rcParamsSettings(15)
@@ -176,8 +177,8 @@ diskSpan = (ADloc[0]/D-Wdx/D/2, ADloc[0]/D+Wdx/D/2)
 MC = False
 MC = True
 
-if MC: N=4 # 4 for k-eps, 2 for LRR
-else: N=1 # 1 for k-eps, 0.5 for LRR
+if MC: N=2 
+else: N=1 
 
 fig, ax = plt.subplots(ncols=1, nrows=2, constrained_layout=True, sharex=True, 
                        figsize=(10,6))
@@ -206,7 +207,7 @@ ax[axIdx].spines['right'].set_visible(False)
 ax[axIdx].spines['top'].set_visible(False)
 
 axIdx = 1
-ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1]-TI_LES[:-1,1].min()+TIMin,
+ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1],#-TI_LES[:-1,1].min()+TIMin,
                color=LESClr, marker="o", mfc='none', lw=0, ms=3)
 ax[axIdx].plot(x_D, TIDetAvgd + TIMin, color=DETClr)
 
@@ -313,7 +314,7 @@ defUSigmaPCE = np.sqrt(np.sum(defU_PCEModes[1:]**2, axis=0))
 
 # % PCE of TI
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
-TISamples = TISamples - TISamples.min(axis=1, keepdims=True)
+TISamples = TISamples #- TISamples.min(axis=1, keepdims=True)
 
 TI_PCEModes = np.zeros((Pplus1, yPts, numLines))
 for l in range(numLines):
@@ -330,14 +331,14 @@ UrefSamples = UrefSamples.reshape(-1,1,1)
 defUMean  = np.mean((UrefSamples-USamplesMag)/UrefSamples, axis=0)
 defUSigma = np.std((UrefSamples-USamplesMag)/UrefSamples, axis=0)
 
-# %% Computing averaged TI fields
+# % Computing averaged TI fields
 TIDet     = np.sqrt(tkeDet*2/3)/Uref *100
 TISamples = np.sqrt(tkeSamples*2/3)/UrefSamples *100
-TISamples = TISamples - TISamples.min(axis=1, keepdims=True)
+TISamples = TISamples #- TISamples.min(axis=1, keepdims=True)
 TIMean    = np.mean(TISamples, axis=0)
 TISigma   = np.std(TISamples, axis=0)
 
-TIMin = TIDet.min(axis=0)
+TIMin = TIDet.min(axis=0) * 0.
 
 # %% Figures settings
 # rcParams.update({'figure.figsize': [15,7]})
@@ -349,10 +350,10 @@ fillClr = 'b'
 LESClr  = 'k'
 
 MC = False
-# MC = True
+MC = True
 
-if MC: N=2 # 4 for k-eps, 2 for LRR
-else: N=0.5 # 1 for k-eps, 0.5 for LRR
+if MC: N=2 # 2 for k-eps, 2 for LRR
+else: N=1 # 1 for k-eps, 0.5 for LRR
 
 fig, ax = plt.subplots(ncols=numLines, nrows=2, constrained_layout=True, 
                        figsize=(15,6), sharey=True)

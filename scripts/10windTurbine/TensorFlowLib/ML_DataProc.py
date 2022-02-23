@@ -42,8 +42,8 @@ mlDataDir = mlDir+'data/'
 
 # %% Case Parameters
 D, h, Uref = 80, 70, 8
-# Influence until next 3 WTs
-d_D, x_up_D_WT = 7*3, 0.01 #1.0
+# Influence until next: 3 (single WT), 6 (multiple WTs)
+d_D, x_up_D_WT = 7*3, 1.0 # 0.01
 ADloc = lambda WT_num: (0 + (WT_num-1) *d_D*D, 0, h)
 
 # Projection mesh params
@@ -104,7 +104,8 @@ def getDataInWT(cCenterWT_idx, s):
     pickle.dump(C_vec.reshape(*mlMeshShape, 2),
                 open(mlDataDir+mlMeshName+'sample_'+str(s)+'/C_vec'+extn,'wb'))    
 
-samplesRange = range(0, 1000)
+samplesRange = range(0, 1000) # single WT
+# samplesRange = range(0, 90) # multiple WTs
 
 pool = Pool(processes=64)
 start = timer()
@@ -117,8 +118,8 @@ pool.join()
 print(timer()-start, 's')
 
 # %% Load a batch and dump it
-batchSize = 1000
-loadSampleRange = range(0,1000)
+batchSize = 1000; loadSampleRange = range(0,1000) # single WT
+# batchSize = 90; loadSampleRange = range(0,90) # multiple WTs
 
 UHub  = np.zeros((batchSize))
 TIHub = np.zeros((batchSize))

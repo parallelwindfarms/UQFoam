@@ -42,59 +42,64 @@ def makePlots(s, mlMeshShape, y0Plane_WT_idx, zhPlane_WT_idx,
               TITestTrue, TITestPred, TIDiff):
     plot_soln = lambda ax, soln, plane, norm=None: ax.imshow(
         soln[plane].reshape(-1,mlMeshShape[2])[::-1], 
-        aspect='auto', 
+        aspect='auto',
         norm=norm
     )
-    err_pct = 0.05
-    normGlobal = plt.Normalize(0, 0.05)
+    err_pct = 0.101
+    normGlobal = plt.Normalize(0, err_pct)
 
     # Contour Plots
     fig, ax = plt.subplots(ncols=3, nrows=4, constrained_layout=True, 
-                           sharex=True, figsize=(16,6))
+                           sharex=True, 
+                           # figsize=(12,6), # single WT
+                            figsize=(16,8), # multiple WTs
+                           )
     ax, CS = ax.flat, [0]*12
     
     norm = plt.Normalize(UMagTestTrue[y0Plane_WT_idx].min(), UMagTestTrue[y0Plane_WT_idx].max())
     CS[0] = plot_soln(ax[0], UMagTestTrue, y0Plane_WT_idx)
     CS[1] = plot_soln(ax[1], UMagTestPred, y0Plane_WT_idx, norm=norm)
-    norm = plt.Normalize(0, UMagTestTrue[y0Plane_WT_idx].max()*err_pct)
-    CS[2] = plot_soln(ax[2], UMagDiff, y0Plane_WT_idx, norm=normGlobal)
+    # norm = plt.Normalize(0, UMagTestTrue[y0Plane_WT_idx].max()*err_pct)
+    norm = normGlobal
+    CS[2] = plot_soln(ax[2], UMagDiff, y0Plane_WT_idx, norm=norm)
     
     CS[3] = plot_soln(ax[3], TITestTrue, y0Plane_WT_idx)
     CS[4] = plot_soln(ax[4], TITestPred, y0Plane_WT_idx)
-    norm = plt.Normalize(0, TITestTrue[y0Plane_WT_idx].max()*err_pct)
-    CS[5] = plot_soln(ax[5], TIDiff, y0Plane_WT_idx, norm=normGlobal)
+    # norm = plt.Normalize(0, UMagTestTrue[y0Plane_WT_idx].max()*err_pct)
+    norm = normGlobal
+    CS[5] = plot_soln(ax[5], TIDiff, y0Plane_WT_idx, norm=norm)
     
     norm = plt.Normalize(UMagTestTrue[zhPlane_WT_idx].min(), UMagTestTrue[zhPlane_WT_idx].max())
     CS[6] = plot_soln(ax[6], UMagTestTrue, zhPlane_WT_idx)
     CS[7] = plot_soln(ax[7], UMagTestPred, zhPlane_WT_idx, norm=norm)
-    norm = plt.Normalize(0, UMagTestTrue[zhPlane_WT_idx].max()*err_pct)
-    CS[8] = plot_soln(ax[8], UMagDiff, zhPlane_WT_idx, norm=normGlobal)
+    # norm = plt.Normalize(0, UMagTestTrue[zhPlane_WT_idx].max()*err_pct)
+    norm = normGlobal
+    CS[8] = plot_soln(ax[8], UMagDiff, zhPlane_WT_idx, norm=norm)
     
     CS[9] = plot_soln(ax[9], TITestTrue, zhPlane_WT_idx)
     CS[10] = plot_soln(ax[10], TITestPred, zhPlane_WT_idx)
-    norm = plt.Normalize(0, TITestTrue[zhPlane_WT_idx].max()*err_pct)
-    CS[11] = plot_soln(ax[11], TIDiff, zhPlane_WT_idx, norm=normGlobal)
+    # norm = plt.Normalize(0, TITestTrue[zhPlane_WT_idx].max()*err_pct)
+    norm = normGlobal
+    CS[11] = plot_soln(ax[11], TIDiff, zhPlane_WT_idx, norm=norm)
         
     for i in range(12):
-        # ax[i].set_xticks([])
+        ax[i].set_xticks([])
         ax[i].set_yticks([])
-        if i in [1,4,7,10]:
-            fig.colorbar(CS[i-1], ax=ax[i], aspect=50)
-        else:
-            fig.colorbar(CS[i], ax=ax[i], aspect=50)
+        if i not in [0,3,6,9]:
+            fig.colorbar(CS[i], ax=ax[i], aspect=25, 
+                         drawedges=False, format='%.1f')
     
-    ax[0].set_title('OpenFOAM (True)')
-    ax[1].set_title('U-Net (Pred)')
-    ax[2].set_title('|True - Pred|')
-    ax[0].set_ylabel('UMag')
-    ax[3].set_ylabel('TI')
-    ax[6].set_ylabel('UMag')
-    ax[9].set_ylabel('TI')
+    ax[0].set_title('True (OpenFOAM)')
+    # ax[1].set_title('Pred (3D U-Net)') # single WT
+    ax[1].set_title('Pred (3D U-Net + Wake Superpostion)') # multiple WTs
+    ax[2].set_title("$|$ True - Pred $|$ / $|$ True $|$")
+    ax[0].set_ylabel('$u\ (m/s)$')
+    ax[3].set_ylabel('$I[\%]$')
+    ax[6].set_ylabel('$u\ (m/s)$')
+    ax[9].set_ylabel('$I[\%]$')
     
-    # ax[0].set_xlim(64*0,64*3)
-    
-    fig.suptitle(f'Case #{s}')
-        
+    return fig
+            
 # %% Helper Functions for Data Loader
 
 # Ususal tf dtype

@@ -39,7 +39,7 @@ mlMeshName, BATCH_SIZE = 'M64/', 10
 
 # %% Case details
 caseName   = cwd.split('/')[-2]
-casePngDir = '/2RRSTF/ML/' + caseName+'/png'
+casePngDir = '/2RRSTF/ML/uqPaperCases/' + caseName+'/png'
 
 if (os.path.exists(DATA+casePngDir))==False:
     print('Making new case data directory...')
@@ -51,8 +51,8 @@ mlDataDir = mlDir+'data/'
 
 # %% Case Parameters
 D, h = 80.0, 70.0
-# Influence until next 3 WTs
-d_D, x_up_D_WT = 7*3, 0.01 #1.0
+# Influence until next: 3 (single WT), 6 (multiple WTs)
+d_D, x_up_D_WT = 7*3, 1.0 # 0.01
 ADloc = lambda WT_num: (0 + (WT_num-1) * 7.0*D, 0, h)
 
 # Projection mesh params
@@ -60,13 +60,8 @@ if mlMeshName == 'M128/': ny, nz = 128, 128
 elif mlMeshName == 'M64/': ny, nz = 64, 64
 
 # %% Read OpenFOAM baseCase mesh access to grid and cell values
-# case = samplesDir+'baseCase/'
-case = samplesDir+'sample_0/'
-
-# case = '/projects/0/uqPint/10windTurbine/2RRSTF/ML/'+\
-#     '5_HornRevRow_refineLocal_realKE_65Dx10Dx4.3D_WdxD_060_WdyzD_15_'+\
-#     'varScl_eigUinTIPert_6WT/DET_samples'+\
-#     '/baseCase/'
+case = samplesDir+'baseCase/'
+# case = samplesDir+'sample_0/'
 
 vtkFile = case+'project2MLMesh_'+mlMeshName+'VTK/project2MLMesh_'+\
     mlMeshName[:-1]+'_0.vtk'
@@ -88,7 +83,8 @@ for WT_num in [1]:
     print('UHubDet TIHubDet:', UHubDet, TIHubDet, '\n')
 
 # %% Data generator
-fileNames = [mlDataDir+mlMeshName+'sample_'+str(i) for i in range(1000)] #IMP!
+fileNames = [mlDataDir+mlMeshName+'sample_'+str(i) for i in range(1000)] # single WT
+# fileNames = [mlDataDir+mlMeshName+'sample_'+str(i) for i in range(90)] # multiple WTs
 generator = dataGenerator(
     mlDataDir, mlMeshName, fileNames, mlMeshShape, batchSize=BATCH_SIZE
 )
@@ -111,7 +107,7 @@ train_data, valid_data, test_data = generator.UNetIOBatchedSplitData
 model.summary()
 
 # %% Model Parameters
-epochs = 2000
+epochs = 1000
 s = len(train_data) * 20
 lr = 1e-3
 lrS = tf.keras.optimizers.schedules.ExponentialDecay(lr, s, 0.9)
@@ -129,7 +125,8 @@ model.fit(train_data.shuffle(len(train_data)),
 # %% Get latest lr and plot losses and errors
 print('Latest lr =',opt._decayed_lr(tf.float32))
 
-fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(15,4), dpi=150,
+myUQlib.rcParamsSettings(18)
+fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(12,5), dpi=150,
                        sharex=True)
 
 try: df
@@ -137,23 +134,24 @@ except NameError: df = pd.DataFrame(model.history.history)
  
 df[['loss', 'val_loss']].plot(ax=ax[0])
 df[['L1', 'val_L1']].plot(ax=ax[1])
-df[['L2', 'val_L2']].plot(ax=ax[2])
+# df[['L2', 'val_L2']].plot(ax=ax[2])
 
 ax[0].set_ylabel('MAE Loss')
 ax[0].set_xlabel('Epoch')
 ax[1].set_ylabel('Relative Error')
 ax[1].set_xlabel('Epoch')
-ax[2].set_ylabel('Relative Error')
-ax[2].set_xlabel('Epoch')
+# ax[2].set_ylabel('Relative Error')
+# ax[2].set_xlabel('Epoch')
 
 ax[0].set_ylim(0,2)
 ax[1].set_ylim(0,1)
-ax[2].set_ylim(0,1)
+# ax[2].set_ylim(0,1)
 
+fig.savefig(DATA+casePngDir+'/history.png', dpi=150)
 pickle.dump(df, open(modelName[:-3]+'_history_df', 'wb'))
 
 # %% Check few cases in test_data
-load_model = 0 ###
+load_model = 1 ### IMP!
 data = test_data
 
 # From the Data Processing Step
@@ -168,11 +166,12 @@ if load_model:
         loaded_model_name, custom_objects=dependencies
     )
     y_pred = loaded_model.predict(data)
+    df = pickle.load(open(modelName[:-3]+'_history_df', 'rb'))
 else:
     y_pred = model.predict(data)
     
-check_idx = np.random.randint(0, len(data), 50)
-# check_idx = [49,  3,  1,  5, 53, 25, 88, 59, 40, 28]
+# check_idx = np.random.randint(0, len(data), 5)
+check_idx = [4]
 
 for s, test_case in enumerate(data):
     if s in check_idx:
@@ -186,11 +185,11 @@ for s, test_case in enumerate(data):
         UMagDiff = np.abs(UMagTestTrue-UMagTestPred).reshape(-1)
         TIDiff = np.abs(TITestTrue-TITestPred).reshape(-1)
         
-        UHubTest = test_case[0][0][0,0,0,6].numpy()
-        TIHubTest = test_case[0][0][0,0,0,7].numpy()
+        UHubTest = test_case[0][0][0,0,0,6].numpy()*UHubStd+UHubMean
+        TIHubTest = test_case[0][0][0,0,0,7].numpy()*TIHubStd+TIHubMean
 
-        print(' UHub =',(UHubTest*UHubStd+UHubMean).item()*100//10/10, \
-              'TIHub =',(TIHubTest*TIHubStd+TIHubMean).item()*100//10/10, 
+        print(' UHub =',(UHubTest).item()*100//10/10, \
+              'TIHub =',(TIHubTest).item()*100//10/10, 
               '\n'
         )
         
@@ -208,12 +207,14 @@ for s, test_case in enumerate(data):
               '\n', 'U:  Pred', UMagTestPred[random_idx])
         print('\n', 'TI: True', TITestTrue[random_idx],\
               '\n', 'TI: Pred', TITestPred[random_idx], '\n')
-
-        makePlots(
-            s, mlMeshShape, y0Plane_WT_idx, zhPlane_WT_idx, 
-            UMagTestTrue, UMagTestPred, UMagDiff/UMagTestTrue,
-            TITestTrue, TITestPred, TIDiff/TITestTrue
-        )
+            
+        myUQlib.rcParamsSettings(18)
+        fig = makePlots(
+                s, mlMeshShape, y0Plane_WT_idx, zhPlane_WT_idx, 
+                UMagTestTrue, UMagTestPred, UMagDiff/UMagTestTrue,
+                TITestTrue, TITestPred, TIDiff/TITestTrue
+            )
+        fig.savefig(DATA+casePngDir+'/results.png', dpi=300)
         
 # %% End
 print('Program ran successfully!\n')

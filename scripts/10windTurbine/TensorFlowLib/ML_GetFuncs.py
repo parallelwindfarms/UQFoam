@@ -52,7 +52,7 @@ def getCaseData(myUQlib, mesh, nCells_WT, cCenterWT_idx,
 
     R = mesh.cell_data['turbulenceProperties:R'][cCenterWT_idx]
     A = myUQlib.anisotropyTensor(
-        myUQlib.symmTensorToTensorv2021(R, nCells_WT), tke, nCells_WT
+        myUQlib.symmTensorToTensorv2012(R, nCells_WT), tke, nCells_WT
     )
 
     nut = np.array(mesh.cell_data['nut'][cCenterWT_idx])
