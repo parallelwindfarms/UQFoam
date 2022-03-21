@@ -23,7 +23,17 @@ Important steps of the algorithm implemented are shown in the figure (below). <b
 <img src="scripts/PhDCodesGitImages/perHill.png" align="center" width="500" />
 <img src="scripts/PhDCodesGitImages/parameters.png" align="center" width="500" />
 
-## Stochatic Simulation
+**Build instructions**
+
+The [```gPCModelFormFoam```](/OpenFOAM/v2106/applications/solvers/gPCModelFormFoam) solver can be build (i.e. compiled like any other OpenFOAM solver) using make files.
+
+```shell
+cd OpenFOAM/v2106/applications/solvers/gPCModelFormFoam
+./Allwclean # wclean
+./Allwmake  # wmake
+```
+
+## Stochatic Simulation (Run example)
 The above case setup is used in section 6.1 from \[1\] and can be found in [```tutorials as periodicHill_REVF```](/OpenFOAM/v2106/tutorials/incompressible/gPCModelFormFoam/periodicHill_REVF). The steps involed in setting up and running a stochastic RANS simulation for flow over _Periodic Hills_ with a _random eddy-viscoity field_ (REVF) are as follows:
 
 #### 1) Uncertainty Quantification 
@@ -46,7 +56,13 @@ The above case setup is used in section 6.1 from \[1\] and can be found in [```t
     Ptrunc          10;    // controls the number of modes to be solved
     ...
     ```
-- The ```run``` script contains commands to run a batch job on SLURM based cluster. The solver returns all the modes of velocity and pressure at ```writeInterval``` in ```system/controlDict```.
+- The ```run``` script contains commands to run a batch job on SLURM based cluster. 
+    - ```blockMesh``` creartes the mesh
+    - ```topSet``` sets the topology for the momentum source in ```system/fvOptions```
+    - ```decomposePar``` decomposes the domain according to ```system/decomposeParDict```
+    - ```foamJob -s -p gPCModelFormFoam -parallel``` runs ```gPCModelFormFoam``` in parallel
+    - ```reconstructPar``` recontructs the solution
+- The solver returns all the modes of velocity and pressure at ```writeInterval``` in ```system/controlDict```.
 - After obtaining the PCEs of velocity and pressure, further post-processing to obtain PCEs of other QoIs (like wall-shear stess) is straight-forward. 
 - In the figure below we have mean and variance of (a) turbulent viscosity, (b) streamwise velocity and (c) wall shear-stress at different locations in x-direction for the flow over periodic hills. Compared with deterministic (DET) and DNS results. Legend in (c) (top) applies to (a) and (b) as well. 
     <img src="scripts/PhDCodesGitImages/results1.png" align="center" width="1000" />
