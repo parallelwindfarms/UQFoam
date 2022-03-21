@@ -1,5 +1,3 @@
-Checking for renaming repo
-
 # Uncertainty Qauntification in CFD simulations
 
 This repository contains codes developed during my PhD at University of Groningen.
