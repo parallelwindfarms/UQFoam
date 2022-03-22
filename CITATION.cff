@@ -1,0 +1,16 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  UQFoam - Uncertainty Qauntification in CFD
+  simulations
+message: >-
+  In case you use this software please cite it (or
+  the corresponding article)
+type: software
+authors:
+  - given-names: Jigar
+    family-names: Parekh
+    email: jigarparekh279@gmail.com
+    affiliation: University of Groningen
