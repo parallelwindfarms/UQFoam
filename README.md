@@ -67,6 +67,12 @@ The above case setup is used in section 6.1 from \[1\] and can be found in [```t
 - In the figure below we have mean and variance of (a) turbulent viscosity, (b) streamwise velocity and (c) wall shear-stress at different locations in x-direction for the flow over periodic hills. Compared with deterministic (DET) and DNS results. Legend in (c) (top) applies to (a) and (b) as well. 
     <img src="scripts/PhDCodesGitImages/results1.png" align="center" width="1000" />
 
+## Running on a PC/laptop
+
+- A fairly less expensive version of this case is [```test_run```](/OpenFOAM/v2106/tutorials/incompressible/gPCModelFormFoam/test_run), which can be used to test the simulation setting and can be run on a local PC/laptop. 
+
+- It is assumed that OpenFOAM is installed and ```gPCModelFormFoam``` is alredy compiled before running the tutorial case(s).
+
 ### Further Study
 - Varying correlation length scales
 - Techniques to overcome the curse of dimensionality
