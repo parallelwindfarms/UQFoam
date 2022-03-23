@@ -1,0 +1,70 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v1906                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      turbulenceProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+/*
+simulationType  RAS;
+
+RAS
+{
+    RASModel        SpalartAllmaras;
+    printCoeffs     no;
+    turbulence      yes;
+}
+//*/
+
+//*
+simulationType LES;
+
+LES
+{
+    LESModel        uqSmagorinsky;      // UQ specific
+
+    mode            FS;                 // UQ specific
+
+    truncated       off;                // UQ specific
+        
+    turbulence      on;
+
+    printCoeffs     on;
+
+    delta           uqvanDriest;  // UQ specific
+
+    uqcubeRootVolCoeffs
+    {
+        deltaCoeff      1;
+    }
+
+    uqvanDriestCoeffs
+    {
+        delta           uqcubeRootVol;
+        uqcubeRootVolCoeffs
+        {
+            deltaCoeff      1;
+        }
+
+        Aplus           26;
+        Cdelta          0.158;
+    }
+    
+    /*********** Uncertain parameter Cs **********/
+    
+    distType            uniform;        // Distribution type    
+    Cs0                 0.10;           // Mean Cs
+    //Cs1               1.44337567e-2;  // ~ Std. deviation
+}
+//*/
+
+// ************************************************************************* //

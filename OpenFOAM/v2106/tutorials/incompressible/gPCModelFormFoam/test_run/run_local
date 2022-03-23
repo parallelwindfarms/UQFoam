@@ -1,0 +1,26 @@
+#!/bin/bash
+
+echo "Sourcing OpenFOAM ..."
+source $FOAM_BASH
+
+cd $PWD
+. ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions
+
+echo "Making log directory for log files ..."
+mkdir log
+
+################################
+
+echo "Running blockMesh ..."
+blockMesh               			>& log/log.blockMesh
+
+echo "Running topoSet ..."
+topoSet						>& log/log.topoSet
+
+echo "Running solver ..."
+gPCModelFormFoam				>& log/log.solve
+
+################################
+
+echo "Done."
+

@@ -1,0 +1,129 @@
+type            sets;
+libs            ("libsampling.so");
+
+writeControl    writeTime;
+
+interpolationScheme cellPoint;
+
+setFormat       raw;
+
+scaleBy			0.001;
+H				#calc "28*$scaleBy";
+Ymin			#calc "1e-6";
+Ymax			#calc "85*$scaleBy";
+Xmin			#calc "0";
+Xmax			#calc "252*$scaleBy";
+Yc				#calc "50*$scaleBy";
+Zc				#calc "126/2 *$scaleBy";
+yPoints			500;
+
+sets
+(     
+    centerline
+    {
+        type    uniform;
+        axis    x;
+        start   ($Xmin $Yc $Zc);
+        end     ($Xmax $Yc $Zc);
+        nPoints 1000;
+    } 
+     
+    X_by_H_0.05
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "0.05 * $H" 0.028007449434884115 $Zc);
+        end     (#calc "0.05 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    } 
+    X_by_H_0.50
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "0.50 * $H" 0.023999999999998453 $Zc);
+        end     (#calc "0.50 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    } 
+    X_by_H_1.00
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "1 * $H" 0.01260 $Zc);
+        end     (#calc "1 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    }    
+    X_by_H_2.00
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "2 * $H" 0.00017 $Zc);
+        end     (#calc "2 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    }    
+    X_by_H_3.00
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "3 * $H" $Ymin $Zc);
+        end     (#calc "3 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    }
+    X_by_H_4.00
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "4 * $H" $Ymin $Zc);
+        end     (#calc "4 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    }
+    X_by_H_5.00
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "5 * $H" $Ymin $Zc);
+        end     (#calc "5 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    }
+    X_by_H_6.00
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "6 * $H" $Ymin $Zc);
+        end     (#calc "6 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    }
+    X_by_H_7.00
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "7 * $H" 0.00017 $Zc);
+        end     (#calc "7 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    }
+    X_by_H_8.00
+    {
+        type    uniform;
+        axis    y;
+        start   (#calc "8 * $H" 0.01260 $Zc);
+        end     (#calc "8 * $H" $Ymax $Zc);
+        nPoints $yPoints;
+    }
+);
+
+fields          (
+					//*
+					pMean0SpAvg pMeanSigmaSpAvg nutMean0SpAvg nutMeanSigmaSpAvg// Scalar
+					UMean0SpAvg UMeanSigmaSpAvg // Vector
+					RMean0SpAvg RMeanSigmaSpAvg // Tensor
+					//*/
+					
+					/*
+					pMeanSpAvg nutMeanSpAvg // Scalar
+					UMeanSpAvg // Vector
+					UPrime2MeanSpAvg // Tensor 
+					//*/
+				);
+
+
+
+
