@@ -69,7 +69,13 @@ The above case setup is used in section 6.1 from \[1\] and can be found in [```t
 
 ## Running on a PC/laptop
 
-- A fairly less expensive version of this case is [```test_run```](/OpenFOAM/v2106/tutorials/incompressible/gPCModelFormFoam/test_run), which can be used to test the simulation setting and can be run on a local PC/laptop. 
+- A fairly less expensive version of this case is [```test_run```](/OpenFOAM/v2106/tutorials/incompressible/gPCModelFormFoam/test_run), which can be used to test the simulation setting and can be run on a local PC/laptop.
+    ```shell
+    cd OpenFOAM/v2106/tutorials/incompressible/gPCModelFormFoam/test_run
+    ./run_local
+    
+    
+    ```
 
 - It is assumed that OpenFOAM is installed and ```gPCModelFormFoam``` is alredy compiled before running the tutorial case(s).
 
