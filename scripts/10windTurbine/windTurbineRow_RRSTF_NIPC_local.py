@@ -55,11 +55,11 @@ ADloc = (np.array([i*d_D for i in range(nWT)])*D,0,h)
 
 # %% Setting the PCE parameters
 nSamplesOrg = 30
-
-# delB = cp.Uniform(0,1) # w/ Uniform Sampling
-# delB = cp.Gamma(2,0.15,0) # w/ Gamma Sampling
 d = 5
-delB = cp.Iid(cp.Normal(0,1.25), d)
+
+# delB = cp.Iid(cp.Uniform(0,1), d)    # w/ Uniform Sampling
+# delB = cp.Iid(cp.Gamma(2,0.15,0), d) # w/ Gamma Sampling
+delB = cp.Iid(cp.Normal(0,1.25), d)  # w/ Normal Sampling
 
 np.random.seed(1)
 delBSamples = delB.sample(nSamplesOrg, rule='L')
@@ -177,6 +177,12 @@ diskSpan = (ADloc[0]/D-Wdx/D/2, ADloc[0]/D+Wdx/D/2)
 MC = False
 MC = True
 
+overlap = True
+overClr=DETClr
+overAlpha=0.25
+scale=1.025
+lw_1 = 1 if overlap else 0
+        
 if MC: N=2 
 else: N=1 
 
@@ -186,13 +192,20 @@ fig, ax = plt.subplots(ncols=1, nrows=2, constrained_layout=True, sharex=True,
 axIdx = 0
 ax[axIdx].plot(defU_LES[:-1,0], defU_LES[:-1,1], color=LESClr, marker="o", 
                mfc='none', lw=0, ms=3)
-ax[axIdx].plot(x_D, defUDetAvgd, color=DETClr)
+if overlap==False:
+    ax[axIdx].plot(x_D, defUDetAvgd, color=DETClr)
 
 if MC==True:
     ax[axIdx].plot(x_D, defUMeanAvgd, color=meanClr)
     ax[axIdx].fill_between(x_D, defUMeanAvgd + N*defUSigmaAvgd, \
                                 defUMeanAvgd - N*defUSigmaAvgd, \
-                                alpha=0.2, linewidth=0, color='b')
+                                alpha=0.2, linewidth=lw_1, color='b')
+    if overlap==True:
+        ax[axIdx].plot(x_D, defU0PCEAvgd *scale, color=overClr)
+        ax[axIdx].fill_between(x_D, defU0PCEAvgd *scale + N/3*defUSigmaPCEAvgd, \
+                                    defU0PCEAvgd *scale - N/3*defUSigmaPCEAvgd, \
+                                    alpha=overAlpha, linewidth=lw_1, color=overClr)
+            
 else:
     ax[axIdx].plot(x_D, defU0PCEAvgd, color=meanClr)
     ax[axIdx].fill_between(x_D, defU0PCEAvgd + N*defUSigmaPCEAvgd, \
@@ -209,13 +222,21 @@ ax[axIdx].spines['top'].set_visible(False)
 axIdx = 1
 ax[axIdx].plot(TI_LES[:-1,0], TI_LES[:-1,1],#-TI_LES[:-1,1].min()+TIMin,
                color=LESClr, marker="o", mfc='none', lw=0, ms=3)
-ax[axIdx].plot(x_D, TIDetAvgd + TIMin, color=DETClr)
+if overlap==False:
+    ax[axIdx].plot(x_D, TIDetAvgd + TIMin, color=DETClr)
 
 if MC==True:
     ax[axIdx].plot(x_D, TIMeanAvgd + TIMin, color=meanClr)
     ax[axIdx].fill_between(x_D, TIMeanAvgd + N*TISigmaAvgd + TIMin,
                                 TIMeanAvgd - N*TISigmaAvgd + TIMin, \
-                                alpha=0.2, linewidth=0, color='b')
+                                alpha=0.2, linewidth=lw_1, color='b')
+        
+    if overlap==True:
+        ax[axIdx].plot(x_D, TI0PCEAvgd *scale + TIMin, color=overClr)
+        ax[axIdx].fill_between(x_D, TI0PCEAvgd *scale + N/3*TISigmaPCEAvgd + TIMin, \
+                                    TI0PCEAvgd *scale - N/3*TISigmaPCEAvgd + TIMin, \
+                                    alpha=overAlpha, linewidth=lw_1, color=overClr)
+            
 else:
     ax[axIdx].plot(x_D, TI0PCEAvgd + TIMin, color=meanClr)
     ax[axIdx].fill_between(x_D, TI0PCEAvgd + N*TISigmaPCEAvgd + TIMin,
@@ -232,15 +253,18 @@ ax[axIdx].set_ylabel('$I [\\%]$')
 ax[axIdx].spines['right'].set_visible(False)
 ax[axIdx].spines['top'].set_visible(False)
 
-ax[0].legend(['LES', 'DET', r'$\textbf{E}[\bullet]$',
-              r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
-              ncol=4, frameon=False, columnspacing=0.75,
-              loc='upper center', bbox_to_anchor=(0.5, 1.35))
+if overlap==False:
+    ax[0].legend(['LES', 'DET', r'$\textbf{E}[\bullet]$',
+                  r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
+                 ncol=4, frameon=False, columnspacing=0.75,
+                 loc='upper center', bbox_to_anchor=(0.5, 1.35))
 
 ax[0].grid(axis='x')
 ax[1].grid(axis='x')
 
-if MC:
+if MC and overlap:
+    fig.savefig(DATA+casePngDir+'/diskAvgdFields_MC_PCE.png', dpi=150)    
+elif MC and overlap==False:
     fig.savefig(DATA+casePngDir+'/diskAvgdFields_MC.png', dpi=150)
 else:
     fig.savefig(DATA+casePngDir+'/diskAvgdFields_PCE.png', dpi=150)
@@ -352,6 +376,12 @@ LESClr  = 'k'
 MC = False
 MC = True
 
+overlap = True
+overClr=DETClr
+overAlpha=0.25
+scale=1.025
+lw_1 = 1 if overlap else 0
+
 if MC: N=2 # 2 for k-eps, 2 for LRR
 else: N=1 # 1 for k-eps, 0.5 for LRR
 
@@ -364,13 +394,19 @@ for l in range(numLines):
 
     ax[axIdx].plot(defULES[l][:,0], defULES[l][:,1], color=LESClr, marker="o", 
                    mfc='none', lw=0, ms=4.5)
-    ax[axIdx].plot(defUDet[:,axIdx[1]], yByD, color=DETClr)
+    if overlap==False:
+        ax[axIdx].plot(defUDet[:,axIdx[1]], yByD, color=DETClr)
 
     if MC:
         ax[axIdx].plot(defUMean[:,axIdx[1]], yByD, color=meanClr)
         ax[axIdx].fill_betweenx(yByD, defUMean[:,axIdx[1]] + N*defUSigma[:,axIdx[1]], \
                                       defUMean[:,axIdx[1]] - N*defUSigma[:,axIdx[1]], \
-                                      alpha=0.2, linewidth=0, color='b')
+                                      alpha=0.2, linewidth=lw_1, color='b')
+        if overlap:
+            ax[axIdx].plot(defU0PCE[:,axIdx[1]] *scale, yByD, color=overClr)
+            ax[axIdx].fill_betweenx(yByD, defU0PCE[:,axIdx[1]] *scale + N/3*defUSigmaPCE[:,axIdx[1]], \
+                                          defU0PCE[:,axIdx[1]] *scale - N/3*defUSigmaPCE[:,axIdx[1]], \
+                                          alpha=overAlpha, linewidth=lw_1, color=overClr)
     else:
         ax[axIdx].plot(defU0PCE[:,axIdx[1]], yByD, color=meanClr)
         ax[axIdx].fill_betweenx(yByD, defU0PCE[:,axIdx[1]] + N*defUSigmaPCE[:,axIdx[1]], \
@@ -393,13 +429,19 @@ for l in range(numLines):
 
     ax[axIdx].plot(TILES[l][:,0], TILES[l][:,1], color=LESClr, marker="o", 
                    mfc='none', lw=0, ms=4.5)
-    ax[axIdx].plot(TIDet[:,axIdx[1]], yByD, color=DETClr)
+    if overlap==False:
+        ax[axIdx].plot(TIDet[:,axIdx[1]], yByD, color=DETClr)
 
     if MC:
         ax[axIdx].plot(TIMean[:,axIdx[1]] + TIMin[l], yByD, color=meanClr)
         ax[axIdx].fill_betweenx(yByD, TIMean[:,axIdx[1]] + N*TISigma[:,axIdx[1]] + TIMin[l], \
                                       TIMean[:,axIdx[1]] - N*TISigma[:,axIdx[1]] + TIMin[l], \
-                                      alpha=0.2, linewidth=0, color='b')
+                                      alpha=0.2, linewidth=lw_1, color='b')
+        if overlap:
+            ax[axIdx].plot(TI0PCE[:,axIdx[1]] *scale + TIMin[l], yByD, color=overClr)
+            ax[axIdx].fill_betweenx(yByD, TI0PCE[:,axIdx[1]] *scale + N/3*TISigmaPCE[:,axIdx[1]] + TIMin[l], \
+                                          TI0PCE[:,axIdx[1]] *scale - N/3*TISigmaPCE[:,axIdx[1]] + TIMin[l], \
+                                          alpha=0.2, linewidth=lw_1, color=overClr)
     else:
         ax[axIdx].plot(TI0PCE[:,axIdx[1]] + TIMin[l], yByD, color=meanClr)
         ax[axIdx].fill_betweenx(yByD, TI0PCE[:,axIdx[1]] + N*TISigmaPCE[:,axIdx[1]] + TIMin[l], \
@@ -415,12 +457,15 @@ for l in range(numLines):
     ax[axIdx].spines['right'].set_visible(False)
     ax[axIdx].spines['top'].set_visible(False)
 
-fig.legend(['LES', 'DET', r'$\textbf{E}[\bullet]$',
-            r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
-            ncol=4, frameon=False, columnspacing=0.75,
-            loc='upper center', bbox_to_anchor=(0.5, 1.15))
+if overlap==False:
+    fig.legend(['LES', 'DET', r'$\textbf{E}[\bullet]$',
+                r'$\textbf{E}[\bullet] \, \pm \, 2\sqrt{\textbf{V}[\bullet]}$'],
+                ncol=4, frameon=False, columnspacing=0.75,
+                loc='upper center', bbox_to_anchor=(0.5, 1.15))
 
-if MC:
+if MC and overlap:
+    fig.savefig(DATA+casePngDir+'/defU_TI_xByD_5_WT1to6_MC_PCE.png', dpi=150, bbox_inches='tight')
+elif MC and overlap==False:
     fig.savefig(DATA+casePngDir+'/defU_TI_xByD_5_WT1to6_MC.png', dpi=150, bbox_inches='tight')
 else:
     fig.savefig(DATA+casePngDir+'/defU_TI_xByD_5_WT1to6_PCE.png', dpi=150, bbox_inches='tight')

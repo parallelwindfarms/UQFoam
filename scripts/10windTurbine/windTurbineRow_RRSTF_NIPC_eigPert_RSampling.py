@@ -32,7 +32,7 @@ myUQlib.rcParamsSettings(15)
 
 # <codecell> Case details
 caseName   = cwd.split('/')[-2]
-casePngDir = '/2RRSTF/NIPC/' + caseName+'/png'
+casePngDir = '/2RRSTF/NIPC/uqPaperCases/' + caseName+'/png'
 
 if (os.path.exists(DATA+casePngDir))==False:
     print('Making new case data directory...')

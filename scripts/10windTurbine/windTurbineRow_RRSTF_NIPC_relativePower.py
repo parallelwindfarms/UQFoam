@@ -23,9 +23,9 @@ cwd = os.getcwd() + "/"
 
 import myUQlib
 
-# <codecell> Case details
+# %% Case details
 caseName   = cwd.split('/')[-2]
-casePngDir = '/2RRSTF/NIPC/' + caseName+'/png'
+casePngDir = '/2RRSTF/NIPC/uqPaperCases/' + caseName+'/png'
 
 if (os.path.exists(DATA+casePngDir))==False:
     print('Making new case data directory...')
@@ -65,4 +65,4 @@ ax.set_xticks(WTlist)
 ax.set_yticks(np.linspace(0.2,1,9))
 ax.grid()
 
-fig.savefig(DATA+casePngDir+'/power.png', dpi=300, bbox_inches='tight')
+# fig.savefig(DATA+casePngDir+'/power.png', dpi=300, bbox_inches='tight')
