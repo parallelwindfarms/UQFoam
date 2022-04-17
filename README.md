@@ -1,8 +1,6 @@
 # Uncertainty Qauntification in CFD simulations
 
-This repository contains codes developed during my PhD at University of Groningen.
-- [OpenFOAM](/OpenFOAM) contains applications (solvers, utilities) and src (fvOptions) compiled with version (v2106).
-- [scripts](/scripts) contains Python and MATLAB scripts for pre- and post- processing. Also contains TensorFlow modular code for data-driven project for UQ analysis.
+This repository contains codes developed during my PhD at University of Groningen. The directory [OpenFOAM](/OpenFOAM) contains applications (solvers, utilities) and src (fvOptions) compiled with version (v2106).
 
 ## Stochastic Solver
 
